@@ -92,7 +92,8 @@ def test_changed_file_rejects_settings_and_tail_diagnosis(tmp_path, monkeypatch,
     changed = dict(stable)
     changed[attribute] += 1
     snapshots = iter([SimpleNamespace(**stable), SimpleNamespace(**changed)])
-    monkeypatch.setattr(diagnostics.os, "fstat", lambda fd: next(snapshots))
+    # Keep the two synthetic samples local; pytest capture also uses os.fstat.
+    monkeypatch.setattr(diagnostics, "os", SimpleNamespace(fstat=lambda fd: next(snapshots)))
     result = diagnose_outcar(path)
     assert result.error and result.electronic_settings is None and result.electronic_step_diagnosis is None
 
