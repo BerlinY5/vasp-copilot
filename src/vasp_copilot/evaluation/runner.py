@@ -155,6 +155,8 @@ def run_scenario(case: Scenario, root: Path) -> CaseResult:
     directory = root / case.name
     checks = []
     try:
+        # Tools return canonical paths; Windows temp roots can use short aliases.
+        directory = directory.resolve()
         if not case.missing_directory:
             directory.mkdir()
             for name, raw in case.files.items():

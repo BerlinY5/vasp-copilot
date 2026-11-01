@@ -35,6 +35,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "pymatgen"
     (("output_comparison", "checks"), [], "comparison_checks"),
     (("diagnostics", "normal_termination"), "successful", "overall_verdicts"),
     (("calculation_status",), "converged", "scan.calculation_status"),
+    (("directory",), "wrong-directory", "scan.directory_preserved"),
 ])
 def test_detects_corruption_inside_full_scan(monkeypatch, tmp_path, path, value, expected_check):
     original = AgentLoop.run
@@ -72,6 +73,14 @@ def test_rejects_promoting_uncertain_comparison_to_match(monkeypatch, tmp_path, 
     assert result.status == "failed"
     failed = {check.name for check in result.checks if not check.passed}
     assert {"comparison_status", "comparison_checks"} <= failed
+
+
+def test_scenario_accepts_equivalent_directory_spelling(tmp_path):
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    case = next(case for case in build_scenarios(load_samples(FIXTURES)) if case.name == "paired_outputs")
+    result = run_scenario(case, existing / "..")
+    assert result.status == "passed", [check.name for check in result.checks if not check.passed]
 
 
 @pytest.mark.parametrize("replacement", [None, b"short", b"x" * 1314, b"x" * 1315],
