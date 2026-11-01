@@ -30,7 +30,7 @@ def test_export_from_database_does_not_execute_models_or_tools(tmp_path, monkeyp
     result = json.loads(capsys.readouterr().out)
     target = tmp_path / "reports" / "generated" / f"run-{run_id}.md"
     assert result == {"status": "exported", "run_id": run_id, "path": str(target.resolve())}
-    assert "参考资料" in target.read_text(encoding="utf-8")
+    assert "References" in target.read_text(encoding="utf-8")
     assert database.read_bytes() == before
 
 

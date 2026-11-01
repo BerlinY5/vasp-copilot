@@ -1,8 +1,8 @@
-# EDIFF 与电子自洽循环
+# EDIFF and electronic self-consistency loops
 Source: https://vasp.at/wiki/index.php/EDIFF
-Keywords: EDIFF, 电子收敛, 电子自洽, 自洽, electronic convergence, SCF
+Keywords: EDIFF, electronic convergence, electronic self-consistency, self-consistency, SCF
 Reviewed: 2026-10-30
 
-官方资料摘要：EDIFF 以 eV 为单位控制电子自洽循环的停止条件。相邻电子步的总自由能变化和能带能量变化都小于该阈值时，满足该能量变化停止条件；EDIFF 为零时则执行 NELM 指定的电子步数。
+Official-source summary: EDIFF controls the stopping condition for electronic self-consistency loops in eV. The energy-change stopping condition is met when both the total free-energy change and the band-energy change between consecutive electronic steps are below this threshold. When EDIFF is zero, the number of electronic steps specified by NELM is performed.
 
-本项目使用限制：官方定义是通用解释，不是本次运行的数值验证。解析器只关联最后采样循环的显式消息，不重算总自由能变化和能带能量变化；未达消息只能说明文件报告未达，不能倒推其中任何变化量已高于或未低于 EDIFF。“条件性解释”也不能把未检查的数值判断写成事实。reached_marker 同样不构成整体收敛证明；特殊模式、日志来源及循环关联仍需核实。项目只报告局部日志警告，不将其称为已独立验证的真实物理故障，也不推断离子优化收敛。
+Project policy: The official definition provides a general explanation, not numerical verification of this run. The parser associates explicit messages only with the final sampled loop and does not recalculate total free-energy or band-energy changes. A not-reached message establishes only what the file reports; it does not establish that either energy change was above, or not below, EDIFF. Conditional explanations must not present unchecked numerical judgments as facts. A reached_marker likewise does not prove overall convergence; special modes, log provenance, and loop association still require verification. The project reports local log warnings without describing them as independently verified physical failures or inferring ionic relaxation convergence.

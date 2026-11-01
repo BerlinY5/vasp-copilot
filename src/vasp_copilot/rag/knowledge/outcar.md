@@ -1,8 +1,8 @@
-# OUTCAR 输出与检查范围
+# OUTCAR output and inspection scope
 Source: https://vasp.at/wiki/index.php/OUTCAR
-Keywords: OUTCAR, 输出文件, 程序结束, 计时, output file, termination
+Keywords: OUTCAR, output file, termination, timing
 Reviewed: 2026-10-23
 
-官方资料摘要：OUTCAR 是 VASP 的详细文本输出，可包含输入参数摘要、电子步信息、应力和原子受力等；输出详略受 NWRITE 等设置影响。
+Official-source summary: OUTCAR is VASP's detailed text output. It can contain input parameter summaries, electronic step information, stress, and atomic forces. Settings such as NWRITE affect the amount of output detail.
 
-本项目使用限制：文件存在或可读取，只证明获得了文件。尾部计时标记属于日志观察，不能单独证明整个计算正常完成，更不能替代电子和离子收敛检查。采样窗口之外、日志截断或拼接造成的信息缺口仍需核实。仅有公开输出样例而没有完整输入文件时，可以检查已有输出，但不能据此宣称能够重新运行该计算。
+Project policy: A file's existence or readability establishes only that the file was obtained. Timing markers in the tail are log observations; by themselves they do not prove successful completion of the whole calculation or replace electronic and ionic convergence checks. Information gaps outside the sampled windows or caused by truncated or concatenated logs still require verification. Public output examples can be inspected without complete input files, but they do not establish that the calculation can be rerun.

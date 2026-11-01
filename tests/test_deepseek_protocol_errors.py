@@ -56,7 +56,7 @@ def test_specific_error_reaches_saved_agent_run_without_raw_response(tmp_path, r
 
     backend = DeepSeekBackend(DeepSeekConfig("test-key"), transport)
     run = AgentLoop(backend, create_registry(tmp_path), 8,
-                    required_tools=("search_knowledge",)).run("检索资料", str(tmp_path))
+                    required_tools=("search_knowledge",)).run("Retrieve references", str(tmp_path))
     assert run.status == "backend_error" and run.decision_steps == 1
     assert run.error.message == expected
     assert run.state.history == [] and run.state.completion_feedback == []
@@ -89,7 +89,7 @@ def test_transport_body_errors_are_specific_and_compatible(monkeypatch, raw, exp
 def test_duplicate_native_call_keeps_prior_tool_history(tmp_path):
     backend = DeepSeekBackend(DeepSeekConfig("test-key"),
                               lambda payload, config: response("tool_calls", content=None, calls=[call()]))
-    run = AgentLoop(backend, create_registry(tmp_path), 4).run("检索", str(tmp_path))
+    run = AgentLoop(backend, create_registry(tmp_path), 4).run("Retrieve", str(tmp_path))
     assert run.status == "backend_error" and run.decision_steps == 2
     assert run.error.message == "DeepSeekDuplicateToolCallError"
     assert len(run.state.history) == 1
@@ -98,7 +98,7 @@ def test_duplicate_native_call_keeps_prior_tool_history(tmp_path):
 def test_missing_native_id_fails_before_transport(tmp_path):
     registry = create_registry(tmp_path)
     observation = registry.execute("search_knowledge", {"query": "EDIFF"})
-    state = AgentState(question="检索", directory=str(tmp_path), history=[ToolEvent(
+    state = AgentState(question="Retrieve", directory=str(tmp_path), history=[ToolEvent(
         step=1, call=ToolCall(tool_name="search_knowledge", arguments={"query": "EDIFF"}), observation=observation)])
 
     def forbidden(*args):

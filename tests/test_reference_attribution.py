@@ -30,9 +30,19 @@ def test_sections_quote_exact_local_lines_and_only_official_summary_has_external
 
 
 def test_unlabelled_paragraph_is_not_promoted_to_official_source():
-    sections = reference_sections(["A local note", "continued", "", "本项目使用限制：policy"], "example.md", "https://example.org")
+    sections = reference_sections(["A local note", "continued", "", "Project policy: policy"], "example.md", "https://example.org")
     assert [(s.kind, s.line_start, s.line_end) for s in sections] == [("unclassified", 6, 7), ("project_policy", 9, 9)]
     assert all(s.source_url is None for s in sections)
+
+
+def test_legacy_paragraph_labels_preserve_section_attribution():
+    sections = reference_sections([
+        "\u5b98\u65b9\u8d44\u6599\u6458\u8981\uff1aA source paraphrase", "",
+        "\u672c\u9879\u76ee\u4f7f\u7528\u9650\u5236\uff1aA project policy",
+    ], "legacy.md", "https://example.org")
+    assert [section.kind for section in sections] == ["official_summary", "project_policy"]
+    assert [section.source_url for section in sections] == ["https://example.org", None]
+    assert all(section.citation.isascii() for section in sections)
 
 
 @pytest.mark.parametrize("kind, url", [("project_policy", "https://example.org"), ("unclassified", "https://example.org"), ("official_summary", None)])
@@ -59,10 +69,10 @@ def saved_search(tmp_path):
         assert sections[0]["source_url"] == "https://vasp.at/wiki/index.php/INCAR"
         assert sections[1]["kind"] == "project_policy" and sections[1]["source_url"] is None
         assert "VASP-Copilot incar.md:8-8" in sections[1]["citation"]
-        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "保留不确定性"}}]}
+        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Preserve uncertainty"}}]}
 
     run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path),
-                    required_tools=("search_knowledge",)).run("核对参数", str(tmp_path))
+                    required_tools=("search_knowledge",)).run("Check the parameters", str(tmp_path))
     assert run.status == "completed"
     repository = RunRepository(tmp_path / "history.sqlite3")
     summary = repository.save(run, "deepseek")
@@ -78,10 +88,10 @@ def test_attribution_reaches_model_and_report_uses_saved_sections_without_reread
 
     monkeypatch.setattr(Path, "open", forbidden)
     report = render_markdown(record)
-    view = report.split("## 完整保存快照")[0]
+    view = report.split("## Complete saved snapshot")[0]
     assert "VASP-Copilot incar.md:8-8" in view
-    assert view.index("此段对应的官网来源") < view.index("**本项目使用限制**")
-    assert "https://" not in view.split("**本项目使用限制**")[1].split("## 后端回答")[0]
+    assert view.index("Official source for this section") < view.index("**Project policy**")
+    assert "https://" not in view.split("**Project policy**")[1].split("## Backend answer")[0]
     assert record.model_dump() == snapshot
 
 
@@ -96,5 +106,5 @@ def test_legacy_hit_without_sections_is_preserved_in_report(tmp_path, monkeypatc
 
     monkeypatch.setattr(Path, "open", forbidden)
     report = render_markdown(record)
-    assert "此历史记录没有按段归属" in report and hit["excerpt"] in report
+    assert "This historical record has no section-level attribution" in report and hit["excerpt"] in report
     assert record.model_dump() == old

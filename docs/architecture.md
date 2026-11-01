@@ -1,49 +1,49 @@
-# Agent 架构：工具注册、决策循环、知识检索、历史与报告
+# Agent architecture: Tool registration, decision loop, knowledge retrieval, history, and reports
 
-当前已有工具层、可替换决策接口、Mock 循环、DeepSeek 适配器和本地知识检索。原有 CLI 默认直接扫描目录；--agent 默认离线，额外指定 --backend deepseek 才访问模型服务。2026-10-24 用户回传一次 completed、4 次决策的在线回答；完整工具历史未提供，人工复核发现回答质量问题，详见 evaluation.md。
+The project has a tool layer, replaceable decision interface, Mock loop, DeepSeek adapter, and local knowledge retrieval. The original CLI scans directories directly by default; --agent defaults to offline operation, and only --backend deepseek accesses the model service. On 2026-10-24 the user returned an online answer with completed and 4 decisions; complete tool history was not provided, and manual review found answer-quality issues. See evaluation.md.
 
-## 调用路径
+## Call path
 
 ```text
 create_registry()
-  → 注册 scan_directory、inspect_directory、diagnose_outcar、inspect_incar、inspect_oszicar、compare_outputs、search_knowledge
+  → Register scan_directory, inspect_directory, diagnose_outcar, inspect_incar, inspect_oszicar, compare_outputs, search_knowledge
 
 registry.execute("scan_directory", {"directory": "..."})
-  → 从字典找到 ToolDefinition
-  → ScanDirectoryArgs 校验参数
-  → 调用 scan(args)
-  → 复用 inspection.scan_directory()
-  → ScanReport 校验输出并转为 JSON 数据
-  → ToolResult 返回 success/data 或 error/error
+  → Find ToolDefinition in the dictionary
+  → Validate arguments with ScanDirectoryArgs
+  → Call scan(args)
+  → Reuse inspection.scan_directory()
+  → Validate output with ScanReport and convert to JSON data
+  → ToolResult returns success/data or error/error
 ```
 
-## 文件职责
+## File responsibilities
 
-- agent/protocol.py：ToolResult 是 Observation。status=success 要有 data 且无 error；status=error 要有 error 且无 data。ToolCall / ToolBatch / Finish 是带 type 判别字段的决策；ToolBatch 包含 2–8 个 ToolCall。ToolEvent 保存一次调用和观察；AgentState 保存问题、目录和历史；AgentRun 保存终止状态与最终回答。
-- agent/tool_registry.py：ToolDefinition 用 dataclass 保存名称、说明、两个模型类型和函数引用。ToolRegistry 用字典查找工具，通过装饰器注册。describe() 输出独立的 JSON Schema，尚未绑定某家模型 API 格式。
-- tools/file_inspection.py：定义 ScanDirectoryArgs、DirectoryInventory，把已有读取函数适配为六个文件工具。inspect_directory 只探测文件，不提前解析整个报告；细粒度解析工具允许 Mock 按结果选择。create_registry() 每次返回独立实例。
-- tests/test_tool_registry.py：使用一个测试专用 double 工具验证通用机制，再用真实扫描适配器验证集成。double 不会注册到生产实例。
+- agent/protocol.py: ToolResult is an Observation. status=success requires data without error; status=error requires error without data. ToolCall / ToolBatch / Finish are decisions discriminated by type; ToolBatch contains 2–8 ToolCall objects. ToolEvent stores a call and observation; AgentState stores the question, directory, and history; AgentRun stores termination status and final answer.
+- agent/tool_registry.py: ToolDefinition uses a dataclass to store the name, description, two model types, and function reference. ToolRegistry looks up tools in a dictionary and registers them through decorators. describe() emits independent JSON Schema, not yet bound to a particular model API format.
+- tools/file_inspection.py: defines ScanDirectoryArgs and DirectoryInventory, adapting existing reading functions into six file tools. inspect_directory probes files only, without parsing a complete report in advance; fine-grained parsers let Mock choose from results. create_registry() returns a separate instance each time.
+- tests/test_tool_registry.py: uses a test-only double tool to verify the common mechanism, then a real scan adapter for integration. double is never registered in production instances.
 
-## 为什么用装饰器
+## Why use decorators
 
-`@registry.register(...)` 会先产生一个装饰器，再将紧接着定义的函数传给它。装饰器把函数和参数模型存入字典，返回原函数。注册只是记录函数，不会立即扫描文件。
+`@registry.register(...)` first produces a decorator, then passes the following function to it. The decorator stores the function and argument model in a dictionary and returns the original function. Registration only records the function; it does not scan files immediately.
 
-工具函数统一接收一个校验后的模型对象。execute() 不需要针对每个工具写 if/else；新增工具只需定义模型、写函数并注册。
+All tool functions receive one validated model object. execute() needs no tool-specific if/else branches; adding a tool only requires models, a function, and registration.
 
-## 返回语义
+## Return semantics
 
-| error.kind | 含义 | 调用者应检查什么 |
+| error.kind | Meaning | What the caller should check |
 | --- | --- | --- |
-| unknown_tool | 名称未注册 | describe() 中的工具名称 |
-| invalid_arguments | 参数未通过模型校验 | 缺失字段、类型、多余字段 |
-| execution_error | 工具执行抛出普通异常 | 消息中的异常类型；如 FileNotFoundError 时核对目录 |
-| invalid_result | 返回形状错误或无法转换为 JSON | 工具实现是否遵守结果模型 |
+| unknown_tool | Name not registered | Tool names in describe() |
+| invalid_arguments | Arguments failed model validation | Missing fields, types, extra fields |
+| execution_error | Tool raised an ordinary exception | Exception type in the message; for example, check the directory for FileNotFoundError |
+| invalid_result | Wrong return shape or cannot convert to JSON | Whether the implementation follows the result model |
 
-成功指工具执行并产出合法数据，不等于 VASP 计算成功。目录存在但 OUTCAR 缺失仍可能返回工具 success，缺失证据在 data 内说明。
+Success means the tool executed and produced valid data, not that VASP succeeded. An existing directory with no OUTCAR may still return tool success, with missing evidence explained inside data.
 
-参数模型继承 Schema，严格校验并禁止多余字段。校验错误不包含原始输入值；执行异常只报告类型，避免将任意内部异常内容直接送给后续模型。开发者可以用 logging 观察名称、开始、完成和错误类别；不记录参数值或完整报告。KeyboardInterrupt 等 BaseException 不会被吞掉。
+Argument models inherit Schema, validate strictly, and forbid extra fields. Validation errors omit raw input values; execution exceptions report only their types to avoid directly forwarding arbitrary internal exception text to subsequent models. Developers can use logging to see names, starts, completions, and error categories, without parameter values or complete reports. BaseException subclasses such as KeyboardInterrupt are not swallowed.
 
-## PowerShell 试运行
+## PowerShell trial run
 
 ```powershell
 Set-Location D:\projects\vasp-copilot
@@ -53,148 +53,148 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 & .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-前三行分别切换目录、设置源码搜索路径、创建注册表并扫描项目根目录。预计输出七个工具的名称列表、`success`、`unknown`。项目根目录没有 VASP 数据也可完成扫描。最后两行分别运行工具层测试和完整测试。若找不到包，检查 PYTHONPATH；若返回 execution_error，检查目录存在性和权限。
+The first three lines change directory, set the source search path, and create a registry to scan the project root. Expected output is a list of seven tool names, `success`, and `unknown`. Scanning can complete even without VASP data in the project root. The last two lines run tool-layer and full tests. If the package cannot be found, check PYTHONPATH; for execution_error, check directory existence and permissions.
 
-## 当前边界与下一步
+## Current boundaries and next steps
 
-仅执行开发者明确注册的同步 Python 函数，不执行模型生成的代码或任意 Shell 命令。注册表不是安全沙箱；当前工具使用本地进程拥有的读取权限。尚无异步执行或强制超时控制；持久化历史由 CLI 显式启用，见下文。
+Only explicitly registered synchronous Python functions execute; model-generated code and arbitrary shell commands do not. The registry is not a security sandbox; current tools use the local process's read permissions. There is no asynchronous execution or enforced timeout control yet; the CLI explicitly enables persistent history, described below.
 
-## Mock 循环
+## Mock loop
 
 ```text
 AgentLoop.run(question, directory)
-  → 新建 AgentState
-  → backend.decide(状态深拷贝, 工具说明)
-  → Pydantic TypeAdapter 校验 ToolCall / ToolBatch / Finish
-      ToolCall → registry.execute → 追加 ToolEvent → 再次决策
-      ToolBatch → 按顺序执行各调用并追加 ToolEvent → 再次决策
+  → Create AgentState
+  → backend.decide(deep-copied state, tool descriptions)
+  → Pydantic TypeAdapter validates ToolCall / ToolBatch / Finish
+      ToolCall → registry.execute → append ToolEvent → decide again
+      ToolBatch → execute each call sequentially and append ToolEvent → decide again
       Finish → completed + answer
-  → 决策次数耗尽：max_steps；后端抛异常或决策非法：backend_error
+  → Decision budget exhausted: max_steps; backend exception or invalid decision: backend_error
 ```
 
-backend.py 的 Protocol 规定 decide() 方法签名，不要求后端继承具体类。循环只依赖这个接口和 ToolRegistry。MockBackend 通过 history[-1].observation 决策，循环本身不知道 VASP 文件名，也不知道应该调用哪个工具。
+The Protocol in backend.py specifies the decide() signature without requiring inheritance from a concrete class. The loop depends only on this interface and ToolRegistry. MockBackend decides using history[-1].observation; the loop itself knows neither VASP filenames nor which tool should be called.
 
-Mock 的实际分支：
+Actual Mock branches:
 
-- 无历史：inspect_directory。
-- 文件检查完成：OUTCAR 与 OSZICAR 都可读则 scan_directory；否则 OUTCAR 可读则 diagnose_outcar；否则 OSZICAR 可读则 inspect_oszicar；否则 INCAR 可读则 inspect_incar；否则解释证据不足。
-- OUTCAR 解析结果返回：根据电子消息和离子停止标记选择 EDIFF、EDIFFG 或 OUTCAR 主题，调用 search_knowledge 后再组织保守说明；实际原文、偏移和错误在历史中保留。INCAR 分支直接解释输入意图。
-- 工具错误：说明后结束；解析器内部 error 也检查，避免把工具 success 等同于文件解析成功。
+- No history: inspect_directory.
+- File inspection completed: choose scan_directory if OUTCAR and OSZICAR are both readable; otherwise diagnose_outcar for readable OUTCAR, inspect_oszicar for readable OSZICAR, inspect_incar for readable INCAR, or explain insufficient evidence.
+- OUTCAR parse result returned: choose EDIFF, EDIFFG, or OUTCAR topics based on electronic messages and the ionic stopping marker; call search_knowledge before assembling a conservative explanation. Actual text, offsets, and errors remain in history. The INCAR branch directly explains input intent.
+- Tool error: explain and finish; parser-internal error is checked too, avoiding confusion between tool success and successful file parsing.
 
-question 仅保存，不作自然语言理解；工具定义虽传给后端，Mock 的策略使用预先约定的工具名。它是离线验收后端，不伪装成 LLM。
+question is saved without natural-language interpretation. Tool definitions are passed to the backend, but Mock uses predefined tool names. It is an offline acceptance test backend and does not impersonate an LLM.
 
-决策步数包含 final，默认最多 6 次，上限 100。工具错误可作为 Observation 交给后端修正，测试后端会依据 invalid_arguments 修正一次参数；默认 Mock 不重试。后端异常、无效 type、错误字段会停止循环，且不会执行该非法决策。KeyboardInterrupt 保持可中断。深拷贝保护的是状态记录，不是对任意 Python 后端的沙箱隔离。
+Decision steps include final; the default limit is 6 and maximum 100. Tool errors can become Observations for backend correction; a test backend fixes arguments once after invalid_arguments, while default Mock does not retry. Backend exceptions, invalid type, or incorrect fields stop the loop without executing the invalid decision. KeyboardInterrupt remains interruptible. Deep copying protects state records; it does not sandbox arbitrary Python backends.
 
-DeepSeek 在线验收可用 --require-knowledge 声明结束前的工具要求。CLI 把 search_knowledge 作为 AgentLoop.required_tools 传入；循环接受 final 前检查真实成功工具历史，未满足则追加 CompletionFeedback 并继续决策。拒绝 final 仍消耗预算，未生成伪工具事件，故 ToolEvent.step 可出现间隔。要求和纠正记录保存在 AgentState，旧快照默认为空列表。DeepSeek 请求携带这些要求、实际检索计数与当前纠正信息；检索零命中可以结束，但应如实说明。详见 online-validation.md。
+DeepSeek online acceptance can declare pre-completion tool requirements with --require-knowledge. The CLI passes search_knowledge as AgentLoop.required_tools; before accepting final, the loop checks actual successful tool history, appending CompletionFeedback and continuing if unmet. A rejected final still consumes budget without generating a fake tool event, so ToolEvent.step may contain gaps. Requirements and correction records live in AgentState, defaulting to empty lists in old snapshots. DeepSeek requests carry these requirements, actual retrieval counts, and current correction feedback; zero-hit retrieval permits completion but must be described honestly. See online-validation.md.
 
-tests/test_agent_loop.py 中的核心验收使用同一 Mock、同一问题和两个目录，分别得到 inspect_directory → diagnose_outcar → search_knowledge 与 inspect_directory → inspect_incar 两条调用历史。另验证空目录、读取期间文件消失、错误恢复、步数限制、历史隔离和 CLI 退出码。
+Core acceptance in tests/test_agent_loop.py uses the same Mock and question with two directories, producing inspect_directory → diagnose_outcar → search_knowledge and inspect_directory → inspect_incar respectively. It also verifies empty directories, files disappearing during reading, error recovery, step limits, history isolation, and CLI exit codes.
 
-## 运行阶段通知
+## Run-stage notifications
 
-agent/progress.py 定义冻结的 ProgressEvent 和进度回调类型，仅包含阶段、决策编号/上限、同轮工具序号、已注册工具名称和固定状态；不持有 AgentState、问题、参数或 Observation。StderrProgressReporter 接收 CLI 提供的 stderr 流，用 monotonic 计算累计耗时，每条通知立即刷新。
+agent/progress.py defines frozen ProgressEvent and a progress callback type containing only stage, decision number/limit, same-round tool index, registered tool name, and fixed status. It holds no AgentState, question, arguments, or Observation. StderrProgressReporter receives the stderr stream supplied by the CLI, computes elapsed time with monotonic, and flushes every notification immediately.
 
-AgentLoop 的可选 on_progress 在决策开始、工具执行前后、最终回答被退回和正常返回运行结果前通知观察者。通知普通异常只记录固定警告，不改变诊断结果；KeyboardInterrupt 继续传播。进度不进入模型请求、数据库快照或报告，不影响决策预算，也不提供自动重试、周期心跳或强制超时。等待阶段直到后端返回才会出现下一条通知。
+AgentLoop's optional on_progress notifies observers at decision start, before/after tool execution, when a final answer is deferred, and before normally returning a run result. Ordinary notification exceptions produce only a fixed warning without altering diagnosis; KeyboardInterrupt still propagates. Progress does not enter model requests, database snapshots, or reports, affect decision budgets, or provide retries, periodic heartbeats, or enforced timeouts. During backend waiting, the next notification appears only after return.
 
-cli.py 的 --progress 仅为本次 Agent 运行创建显示对象，不安装全局 logging handler；默认关闭，历史查询拒绝该参数。原注册表日志对未知工具名也使用固定占位符，避免将模型生成的任意名称写入日志；未知名称仍按原机制作为工具错误保留在诊断历史中。
+cli.py creates a display object only for this Agent run with --progress, without installing a global logging handler. Progress is off by default and rejected for history queries. Registry logs also use a fixed placeholder for unknown tool names, preventing arbitrary model-generated names from entering logs; unknown names remain tool errors in diagnostic history through the original mechanism.
 
-## DeepSeek 适配层
+## DeepSeek adapter
 
-config.py 从进程环境读取密钥、模型名和超时，避免读入整个环境或自动加载私有文件。agent/deepseek.py 实现同一个 decide() 接口：将状态历史转换为 messages，将工具定义转换为 functions，通过可注入的 HTTP 传输函数获取响应，再转换为 ToolCall、ToolBatch 或 Finish。
+config.py reads the key, model name, and timeout from the process environment without loading the entire environment or automatically loading private files. agent/deepseek.py implements the same decide() interface: convert state history into messages, tool definitions into functions, get a response through an injectable HTTP transport, and convert it into ToolCall, ToolBatch, or Finish.
 
-ToolCall 新增可选 call_id、assistant_content，Mock 不依赖它们；DeepSeek 必须保留它们以回放真实工具调用及对应 Observation。循环本身不依赖 DeepSeek 的请求格式，测试可以替换传输函数而不访问网络。
+ToolCall adds optional call_id and assistant_content. Mock does not depend on them; DeepSeek must preserve them to replay real tool calls and corresponding Observations. The loop itself is independent of DeepSeek request format, and tests can replace transport without network access.
 
-一批工具占一次决策；同批 ToolEvent.step 相同，batch_index 从 1 开始，batch_size 为整批大小。旧记录缺少批次字段时默认 1/1，无需数据库迁移。DeepSeek 回放按 step 分组，一条 assistant 消息携带整批原生调用，后跟每项 tool 结果；批次缺失、乱序或 ID 重复时拒绝发送。报告显示同轮调用序号。
+One tool batch occupies one decision; ToolEvent.step is shared within the batch, batch_index starts at 1, and batch_size is its full size. Old records missing batch fields default to 1/1 without database migration. DeepSeek groups replay by step: one assistant message carries all native calls, followed by each tool result. Missing, out-of-order, or duplicate-ID batches are rejected before sending. Reports show same-round call indices.
 
-整批结构与 JSON 校验在执行前完成；注册表仍逐项处理业务参数和目录约束，某项工具错误不撤销已完成观察，也不阻止后续项执行。同批工具串行运行，没有原子快照保证。每轮最多 8 项，最后一个允许的决策也执行完整合法批次，之后没有预算生成最终回答时返回 max_steps。Mock 策略仍只返回单个工具调用。
+Batch structure and JSON validation complete before execution. The registry still handles business arguments and directory restrictions individually; one tool error neither rolls back completed observations nor blocks later items. Same-batch tools run serially without atomic snapshots. A round has at most 8 calls; even the last permitted decision executes its complete valid batch, returning max_steps if no budget remains for a final answer. Mock still returns only single tool calls.
 
-CLI 创建绑定目录的 ToolRegistry。目录检查在执行函数之前生效，六个文件工具复用同一检查函数；不依赖模型遵守提示。模型提示要求引用证据并区分观察与推断，但模型自然语言结论尚无自动事实校验。
+The CLI creates a directory-bound ToolRegistry. Directory checks apply before function execution and are shared by all six file tools, independent of model obedience. Prompts require evidence citations and observation/inference separation, but model natural-language conclusions have no automatic fact-checking yet.
 
-工具说明明确返回范围与重叠：compare_outputs 适合单独核对步编号；scan_directory 一次返回文件清单、输入设置、OUTCAR 参数摘要、两份日志观察和编号比较。diagnose_outcar 不提取前缀 IBRION/NSW，inspect_directory 只探测文件。需要讨论模式参数时应获取 scan_directory.output_context；仅回答编号问题时不必添加模式讨论。提示鼓励复用已有观察、按缺口追加工具，不强制固定调用顺序，也不在运行时拦截重复读取。工具选择与自然语言的证据边界仍须在线验收。
+Tool descriptions state scope and overlap: compare_outputs is for standalone step comparison; scan_directory returns file inventory, input settings, an OUTCAR parameter summary, observations from both logs, and step comparison. diagnose_outcar does not extract prefix IBRION/NSW; inspect_directory probes files only. Discussing mode parameters requires scan_directory.output_context; a step-number-only question need not add mode discussion. Prompts encourage reusing observations and filling gaps with tools, without imposing a fixed order or blocking duplicate reads at run time. Tool choice and natural-language evidence boundaries still require online acceptance.
 
-配置和上线验证步骤见 deepseek.md。测试不需要密钥；实际联调需用户在本地配置 DEEPSEEK_API_KEY。最新在线发现与针对性回归结果见 online-validation.md。
+See deepseek.md for configuration and online validation steps. Tests need no key; real integration requires the user to configure DEEPSEEK_API_KEY locally. See online-validation.md for latest online findings and targeted regression results.
 
-## 本地知识工具
+## Local knowledge tool
 
-tools/knowledge_search.py 注册知识检索工具，复用同一参数校验、Observation 和历史机制，AgentLoop 不作改动。rag/retriever.py 用关键词匹配包内 Markdown 短文，返回正文、本地行号、官方来源和 evidence_type=reference。知识检索不接收目录参数、不读取用户计算文件、不联网。
+tools/knowledge_search.py registers retrieval using the same argument validation, Observation, and history mechanisms, without changes to AgentLoop. rag/retriever.py keyword-matches bundled Markdown notes and returns body text, local line numbers, official sources, and evidence_type=reference. Retrieval takes no directory argument, reads no user calculation files, and makes no network requests.
 
-Mock 根据文件观察选择主题，检索失败时仍保留文件证据。DeepSeek 提示明确要求分别引用文件证据和参考资料，但自然语言结论尚无自动事实校验。资料格式、模块阅读顺序及验收命令见 [本地检索说明](rag.md)。
+Mock selects topics from file observations and retains file evidence if retrieval fails. DeepSeek prompts explicitly require separate citations for file evidence and reference material, but natural-language conclusions still lack automatic fact-checking. See [Local retrieval](rag.md) for material format, module reading order, and acceptance commands.
 
-## SQLite 持久化
+## SQLite persistence
 
 ```text
 CLI --agent [--save-history]
   → AgentLoop.run()
-  → AgentRun（成功、达到上限或后端错误）
-  → 若显式保存：RunRepository.save(run, backend)
-  → 原运行结果 + history_record 保存状态
+  → AgentRun (success, budget exhausted, or backend error)
+  → If explicitly saved: RunRepository.save(run, backend)
+  → Original run result + history_record storage status
 
 CLI --history / --show-run ID
-  → RunRepository 以 mode=ro 查询 SQLite
-  → 摘要列表 / 经过校验的 AgentRun 快照
+  → RunRepository queries SQLite with mode=ro
+  → Summary list / validated AgentRun snapshot
 ```
 
-storage/repository.py 定义 RunSummary、StoredRun 和 RunRepository。使用单张 runs 表，摘要列方便列表查询，run_json 保留完整工具历史与引用。参数化 SQL 防止问题文本被当作语句；事务保证保存整体提交或回滚；连接显式关闭，避免 Windows 文件锁残留。
+storage/repository.py defines RunSummary, StoredRun, and RunRepository. A single runs table uses summary columns for list queries and run_json for complete tool history and citations. Parameterized SQL prevents question text from being interpreted as statements; transactions commit or roll back the entire save; connections close explicitly to avoid lingering Windows file locks.
 
-数据库标识和版本不匹配时拒绝操作。列表不读取大 JSON，详情读取后用 AgentRun 验证并检查摘要一致性。查询不执行工具、不加载模型配置、不重新扫描文件，也不创建缺失数据库。
+Mismatched database identifiers or versions are rejected. Lists do not read large JSON values; details validate AgentRun and summary consistency after reading. Queries neither execute tools, load model configuration, rescan files, nor create missing databases.
 
-CLI 仅在 --save-history 时添加 history_record，不改变 AgentLoop 或 AgentRun。保存失败仍向用户返回已产生的回答，并单独标记存储错误。当前保存的是最终快照，尚无逐步提交、历史重放或恢复执行。详细用法见 [诊断历史](history.md)。
+The CLI adds history_record only with --save-history, without changing AgentLoop or AgentRun. A failed save still returns the produced answer to the user with a separate storage error. Currently only final snapshots are saved; no incremental commits, history replay, or execution resumption. See [Diagnostic history](history.md).
 
-## 报告导出
+## Report export
 
 ```text
 CLI --export-run ID [--db PATH] [--output FILE.md]
-  → RunRepository.get(ID)，只读数据库并校验历史
-  → render_markdown(StoredRun)，纯格式化
-  → export_markdown()，以独占新建方式写入 UTF-8 文件
+  → RunRepository.get(ID), read-only database access and history validation
+  → render_markdown(StoredRun), pure formatting
+  → export_markdown(), exclusive creation of a new UTF-8 file
   → exported + run_id + path
 ```
 
-reports/generator.py 从保存的 Observation 生成专用视图，复用既有数据模型，分别呈现文件证据、知识参考与后端原文。不增加科学判定，不执行工具，也不重新读取当前知识库。专用视图不支持或格式不匹配的观察明确回退到原始 JSON；完整保存快照放在报告末尾。
+reports/generator.py builds dedicated views from saved Observations using existing data models, presenting file evidence, knowledge references, and original backend text separately. It adds no scientific judgments, executes no tools, and does not reread the current knowledge base. Unsupported or mismatched observations explicitly fall back to raw JSON; the full saved snapshot closes the report.
 
-文本表格转义与自适应代码围栏使日志和后端原文作为文字展示。export_markdown 只写新 .md 文件，不覆盖旧报告；正常可捕获写入失败会尝试清理本次半成品。CLI 把输出错误与数据库错误分开报告，保留原记录。详情见 [报告导出](reports.md)。
+Table escaping and adaptive code fences present log/backend originals as text. export_markdown writes only new .md files without overwriting existing reports; normally catchable write failures attempt to remove this run's incomplete file. The CLI reports output and database errors separately, retaining the original record. See [Report export](reports.md).
 
-## 离线场景评估
+## Offline scenario evaluation
 
 ```text
 python -m vasp_copilot.evaluation
-  → cases.load_samples() 核验公开样例大小和 SHA-256
-  → cases.build_scenarios() 构造 16 个场景及固定预期（mock-agent-v2）
-  → runner.evaluate() 创建临时目录
-      → run_scenario() 写入场景副本，创建受目录约束的注册表
-      → AgentLoop + MockBackend（异常场景注入测试后端）
-      → check_run() 对照预期，拆出完整扫描中保存的各类观察
-      → observations.py 核对 OSZICAR 数值、编号比较及双方证据原文位置
-      → 核验输入文件未改变
-  → EvaluationReport：逐项 expected / actual / passed 与总计
-  → 可选新建 JSON 文件；自动清理临时场景
+  → cases.load_samples() verifies public sample sizes and SHA-256
+  → cases.build_scenarios() constructs 16 scenarios and fixed expectations (mock-agent-v2)
+  → runner.evaluate() creates temporary directories
+      → run_scenario() writes scenario copies and creates a directory-restricted registry
+      → AgentLoop + MockBackend (injected test backend for exception scenarios)
+      → check_run() compares expectations and extracts saved observations from complete scans
+      → observations.py checks OSZICAR values, step comparison, and original evidence positions on both sides
+      → Verify input files unchanged
+  → EvaluationReport: per-check expected / actual / passed and totals
+  → Optionally create new JSON file; automatically clean up temporary scenarios
 ```
 
-evaluation/cases.py 将样例来源、人工变换及预期观察放在一起；预期值来自已人工核对的固定日志，不由当前解析器生成。runner.py 负责实际调用和评分，observations.py 核对保存的输出观察，不重新读取当前文件或调用解析器；__main__.py 负责参数、JSON 输出和退出码，与日常诊断 CLI 分开。v2 保留原有 9 个场景，并补充 OSZICAR 单文件、双文件一致、不一致、截断及证据不足等 7 个场景。
+evaluation/cases.py keeps sample sources, artificial transformations, and expected observations together. Expected values come from manually checked fixed logs, not the current parser. runner.py handles execution and scoring; observations.py checks saved output observations without rereading current files or calling parsers; __main__.py handles arguments, JSON, and exit codes separately from the diagnostic CLI. v2 retains the original 9 scenarios and adds 7 for OSZICAR alone, matched/mismatched paired files, truncation, and insufficient evidence.
 
-评估模块复用现有 Agent 与工具，不需要修改主循环、数据库或模型配置。它使用明确的 Mock 工具顺序检查回归，不适合直接给自由选择工具的真实模型评分。现阶段只检查回答存在性和参考 URL 的包含关系，没有语义判分。失败后查看具体检查项，不应直接把当前实际值改成预期值。详见 evaluation.md。
+Evaluation reuses existing Agent/tools without modifying the main loop, database, or model configuration. Its explicit Mock tool-order regressions are unsuitable for directly grading real models with free tool choice. It currently checks only answer presence and inclusion of reference URLs, without semantic scoring. Inspect individual failed checks rather than replacing expectations directly with actual values. See evaluation.md.
 
-## OSZICAR 观察接入
+## OSZICAR integration
 
-oszicar.inspect_oszicar() 读取末尾有限字节并生成 OszicarObservation。schemas.py 分别定义电子行、能量摘要和 OSZICAR 证据，不扩大原 OUTCAR Evidence 的文件类型。ScanReport.oszicar 为可选字段，使旧快照仍能校验；新扫描主动填入观察或读取错误。
+oszicar.inspect_oszicar() reads bounded tail bytes and produces OszicarObservation. schemas.py defines electronic lines, energy summaries, and OSZICAR evidence separately without broadening the existing OUTCAR Evidence file type. ScanReport.oszicar is optional for validation of old snapshots; new scans explicitly populate an observation or read error.
 
-普通扫描和 inspect_oszicar 工具复用同一解析器。Mock 在没有可读 OUTCAR 时增加 OSZICAR 分支；DeepSeek 可根据问题选择新工具。报告的 _oszicar() 只处理保存的观察，分别展示电子行与摘要，不从当前文件补全旧记录。调用方式和字段说明见 oszicar.md。
+Normal scans and inspect_oszicar reuse one parser. Mock adds an OSZICAR branch when OUTCAR is unreadable; DeepSeek can choose the tool based on the question. Report _oszicar() handles saved observations only, displaying electronic lines and summaries separately without filling old records from current files. See oszicar.md for usage and fields.
 
-## 电子循环局部诊断
+## Local electronic-loop diagnosis
 
-electronic_diagnosis.py 的 diagnose_electronic_step() 是纯函数，接收 iterations.py 已解析的 IterationObservation，检查标题、唯一消息、issues 和偏移顺序，返回 ElectronicStepDiagnosis。它不读文件、不重算能量、不解析参数；诊断证据深拷贝自原观察。diagnostics.py 在一次既有尾部读取后调用该函数，diagnose_outcar 与组合扫描自动携带结果。
+diagnose_electronic_step() in electronic_diagnosis.py is a pure function accepting IterationObservation already parsed by iterations.py. It checks headers, unique messages, issues, and offset order, returning ElectronicStepDiagnosis. It reads no files, recomputes no energies, and parses no parameters; diagnostic evidence is deep-copied from original observations. diagnostics.py calls it after an existing tail read, and diagnose_outcar and combined scans automatically carry the result.
 
-schemas.py 用 reported_not_reached、not_triggered、unknown 区分局部结果，severity 仅在警告时为 warning；整体三类状态继续为 unknown。reports/generator.py 展示该结果、影响和建议，字段缺失或读取失败时明确未生成/未保存，不重算旧快照。DeepSeek 的工具说明和提示要求解释局部警告，不把三类总体 unknown 当成没有任何可报告的问题。Mock 策略未扩展，测试替代传输只验证消息和保存流程，真实解释效果仍由用户在线验收。
+schemas.py distinguishes reported_not_reached, not_triggered, and unknown local results; severity is warning only for warnings, while all three overall states remain unknown. reports/generator.py displays the result, impact, and suggestions, explicitly stating not generated/not saved for absent fields or read failures without recalculating old snapshots. DeepSeek tool descriptions and prompts require explaining local warnings rather than treating the three overall unknown states as absence of reportable problems. Mock policy was not extended; substitute-transport tests verify messages/storage only, while real interpretation remains subject to user online acceptance.
 
-## 输出日志编号比较实现
+## Output log step-comparison implementation
 
-output_comparison.py 的 compare_output_steps() 是纯比较函数，复用 OutputDiagnosis 与 OszicarObservation，并复制原文证据。它先处理错误和上下文问题，再比较离子编号；只有离子编号相同且 OSZICAR 行顺序可靠时才比较电子编号。inspect_output_comparison() 为独立工具读取两份文件。
+compare_output_steps() in output_comparison.py is a pure comparison function reusing OutputDiagnosis and OszicarObservation and copying original evidence. It handles errors/context issues first, then compares ionic numbers; electronic numbers are compared only if ionic numbers match and OSZICAR line ordering is reliable. inspect_output_comparison() reads both files for the standalone tool.
 
-scan_directory 复用当前已经解析的观察生成 output_comparison，不再次读取尾部。Mock 在两份输出都可读时选择完整扫描，检索完成后同时解释 OUTCAR 与比较结果；检索失败仍保留文件证据。DeepSeek 可以独立调用 compare_outputs。新字段在 ScanReport 中可选，旧记录不追补新结论；报告支持专用比较表格。详见 output-comparison.md。
+scan_directory reuses already parsed observations to produce output_comparison without rereading tails. When both outputs are readable, Mock selects a complete scan and explains OUTCAR and comparison results after retrieval; failed retrieval still retains file evidence. DeepSeek can call compare_outputs independently. The new ScanReport field is optional; old records receive no new conclusions, while reports support a dedicated comparison table. See output-comparison.md.
 
-## 电子自洽设置驱动的核查建议
+## Setting-driven electronic self-consistency checks
 
-scf_settings.py 的 observe_electronic_settings() 只解析调用者提供的有限字节，精确分标签和分号段，分别记录五项值、状态和证据。run_start_offsets() 识别受限运行标题，帮助发现已知跨运行风险；它不能完整验证运行身份。
+observe_electronic_settings() in scf_settings.py parses only bounded bytes supplied by the caller, distinguishing exact tags and semicolon segments, and separately recording five values, statuses, and evidence. run_start_offsets() recognizes limited run headers to help identify known cross-run risks; it cannot fully verify run identity.
 
-diagnostics.py 通过同一文件句柄读取前缀与尾部，检查读取长度、大小和时间戳后，把设置观察传给 electronic_diagnosis.py。diagnose_electronic_step() 保持原消息结果，再据可靠采样值生成 settings_considerations 和具体核查建议；发现运行边界问题时不应用这些设置。报告展示保存的参数表、证据与条件性说明，模型通过原有工具结果获得同样内容。既有 input_context/output_context/context_comparison 仍只处理 IBRION/NSW，不将新增设置混入旧比较。
+diagnostics.py reads prefix/tail through one file handle, checks read lengths, sizes, and timestamps, then passes settings to electronic_diagnosis.py. diagnose_electronic_step() retains the original message result, adding settings_considerations and specific checks from reliable sampled values; settings are not applied when run-boundary issues are found. Reports show saved parameter tables, evidence, and conditional explanations; models receive the same content through existing tool results. Existing input_context/output_context/context_comparison still handle IBRION/NSW only, keeping new settings out of that comparison.
 
-schemas.py 的 ElectronicSetting/ElectronicSettings 定义观察，ElectronicSettingConsideration 定义带证据的条件说明。OutputDiagnosis 新字段默认 null，ElectronicStepDiagnosis 新列表默认空；读取旧记录不重新扫描、不改旧答案。此阶段没有新增依赖、工具名称或 Mock 策略。
+ElectronicSetting/ElectronicSettings in schemas.py define observations; ElectronicSettingConsideration defines evidence-based conditional explanations. The new OutputDiagnosis field defaults to null, and new ElectronicStepDiagnosis lists default to empty. Reading old records does not rescan files or change old answers. This stage added no dependencies, tool names, or Mock policies.

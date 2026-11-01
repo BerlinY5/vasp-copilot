@@ -16,7 +16,7 @@ def compare_files(tmp_path, output, input_text="IBRION=2;NSW=20"):
 
 
 def test_comparison_keeps_values_and_exact_evidence(tmp_path):
-    prefix = "title: 测试\r\n".encode()
+    prefix = "title: \u6d4b\u8bd5\r\n".encode()
     observed, report = compare_files(tmp_path, prefix + b" IBRION = 2 ionic relaxation\r\n NSW = 30 steps\r\n")
     assert [p.status for p in report.parameters] == ["matched", "mismatched"]
     assert report.parameters[1].incar_value == 20

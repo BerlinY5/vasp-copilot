@@ -1,4 +1,4 @@
-"""Search short, curated Markdown notes by explicit bilingual keywords."""
+"""Search short, curated Markdown notes with English and legacy query keywords."""
 
 import re
 from datetime import date
@@ -15,9 +15,40 @@ MAX_DOCUMENT_BYTES = 16 * 1024
 MAX_DOCUMENTS = 32
 MAX_EXCERPT_CHARS = 4000
 
+# Preserve existing Chinese queries while the maintained corpus uses English.
+# Each alias belongs to one canonical keyword and never adds a second score.
+LEGACY_KEYWORD_ALIASES: dict[str, tuple[str, ...]] = {
+    "electronic algorithm": ("\u7535\u5b50\u7b97\u6cd5",),
+    "post-processing settings": ("\u540e\u5904\u7406\u8bbe\u7f6e",),
+    "electronic convergence": ("\u7535\u5b50\u6536\u655b",),
+    "electronic self-consistency": ("\u7535\u5b50\u81ea\u6d3d",),
+    "self-consistency": ("\u81ea\u6d3d",),
+    "fixed charge": ("\u56fa\u5b9a\u7535\u8377",),
+    "non-self-consistent settings": ("\u975e\u81ea\u6d3d\u8bbe\u7f6e",),
+    "parameter checking": ("\u53c2\u6570\u6838\u5bf9",),
+    "parameter mismatch": ("\u53c2\u6570\u4e0d\u4e00\u81f4",),
+    "input-output": ("\u8f93\u5165\u8f93\u51fa",),
+    "ionic convergence": ("\u79bb\u5b50\u6536\u655b",),
+    "structural optimization": ("\u7ed3\u6784\u4f18\u5316",),
+    "force convergence": ("\u529b\u6536\u655b",),
+    "electronic iteration limit": ("\u7535\u5b50\u8fed\u4ee3\u4e0a\u9650",),
+    "SCF problems": ("\u81ea\u6d3d\u5f02\u5e38",),
+    "EDIFF not reached": ("\u672a\u8fbeEDIFF",),
+    "step numbering": ("\u6b65\u7f16\u53f7",),
+    "step index": ("\u6b65\u53f7",),
+    "electronic row": ("\u7535\u5b50\u884c",),
+    "energy summary": ("\u80fd\u91cf\u6458\u8981",),
+    "output file": ("\u8f93\u51fa\u6587\u4ef6",),
+    "termination": ("\u7a0b\u5e8f\u7ed3\u675f",),
+    "timing": ("\u8ba1\u65f6",),
+}
+LEGACY_KEYWORD_ALIASES = {keyword.casefold(): aliases for keyword, aliases in LEGACY_KEYWORD_ALIASES.items()}
+OFFICIAL_SUMMARY_LABELS = ("Official-source summary:", "\u5b98\u65b9\u8d44\u6599\u6458\u8981\uff1a")
+PROJECT_POLICY_LABELS = ("Project policy:", "\u672c\u9879\u76ee\u4f7f\u7528\u9650\u5236\uff1a")
+
 
 class SearchKnowledgeArgs(Schema):
-    query: str = Field(min_length=1, max_length=500, description="VASP terms or a short Chinese/English question")
+    query: str = Field(min_length=1, max_length=500, description="VASP terms or a short question in English or Chinese")
     top_k: int = Field(default=3, ge=1, le=5, description="Maximum number of reference passages")
 
     @field_validator("query")
@@ -64,11 +95,13 @@ class KnowledgeSearchResult(Schema):
     query: str
     hits: list[KnowledgeHit]
     notice: str = (
-        "本地知识库不是本次计算的文件证据；没有命中不表示计算异常。"
-        "excerpt 中的“官方资料摘要”是本项目对 source 的转述，不是官方原文引语；"
-        "“本项目使用限制”来自 VASP-Copilot，不能归因于 source 对应的官方资料。"
-        "新结果的 sections 按段标明归属：官网链接仅支持 official_summary；"
-        "project_policy 应引用其 citation（项目笔记与行号），不要写“同上官网来源”。"
+        "The local knowledge base is reference material, not file evidence for this calculation; "
+        "no matches do not indicate a calculation problem. "
+        "'Official-source summary:' in an excerpt is the project's paraphrase of the source, "
+        "not a direct quotation. 'Project policy:' comes from VASP-Copilot and must not be "
+        "attributed to the official source. Result sections identify attribution by paragraph: "
+        "external source URLs support only official_summary sections; cite project_policy "
+        "using its citation (the project note and line numbers), without reusing an official-source citation."
     )
 
 
@@ -78,6 +111,13 @@ def keyword_matches(keyword: str, query: str) -> bool:
     if keyword.isascii():
         return re.search(r"(?<![a-z0-9_])" + re.escape(keyword) + r"(?![a-z0-9_])", query) is not None
     return keyword in query
+
+
+def query_matches_keyword(keyword: str, query: str) -> bool:
+    """Accept legacy aliases without duplicating a canonical keyword's score."""
+    return keyword_matches(keyword, query) or any(
+        keyword_matches(alias, query) for alias in LEGACY_KEYWORD_ALIASES.get(keyword.casefold(), ())
+    )
 
 
 def reference_sections(body: list[str], document: str, source: str) -> list[ReferenceSection]:
@@ -94,12 +134,12 @@ def reference_sections(body: list[str], document: str, source: str) -> list[Refe
         if not paragraph:
             continue
         text = "\n".join(paragraph)
-        kind = ("official_summary" if paragraph[0].startswith("官方资料摘要：") else
-                "project_policy" if paragraph[0].startswith("本项目使用限制：") else "unclassified")
+        kind = ("official_summary" if paragraph[0].startswith(OFFICIAL_SUMMARY_LABELS) else
+                "project_policy" if paragraph[0].startswith(PROJECT_POLICY_LABELS) else "unclassified")
         location = f"{document}:{start}-{number - 1}"
-        citation = (f"{location}（官方资料摘要，项目转述）" if kind == "official_summary" else
+        citation = (f"{location} (official-source summary; project paraphrase)" if kind == "official_summary" else
                     f"VASP-Copilot {location}" if kind == "project_policy" else
-                    f"{location}（归属未分类）")
+                    f"{location} (unclassified attribution)")
         sections.append(ReferenceSection(
             kind=kind, text=text, line_start=start, line_end=number - 1, citation=citation,
             source_url=source if kind == "official_summary" else None,
@@ -147,7 +187,7 @@ class KnowledgeRetriever:
             excerpt = "\n".join(body)
             if not excerpt.strip() or len(excerpt) > MAX_EXCERPT_CHARS:
                 raise ValueError("Knowledge passage is empty or too long")
-            matched = [word for word in keywords if keyword_matches(word, args.query)]
+            matched = [word for word in keywords if query_matches_keyword(word, args.query)]
             if matched:
                 hits.append(KnowledgeHit(
                     document=document.name, title=title, source=source, reviewed_on=reviewed,

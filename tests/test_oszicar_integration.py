@@ -27,17 +27,17 @@ def test_scan_and_cli_include_oszicar_with_no_overall_verdict(tmp_path, capsys):
 def test_mock_oszicar_branch_and_saved_report_roundtrip(tmp_path):
     (tmp_path / "OSZICAR").write_bytes(FIXTURE.read_bytes())
     (tmp_path / "INCAR").write_text("IBRION=2; NSW=20\n", encoding="utf-8")
-    run = AgentLoop(MockBackend(), create_registry(tmp_path)).run("检查", str(tmp_path))
+    run = AgentLoop(MockBackend(), create_registry(tmp_path)).run("Inspect", str(tmp_path))
     assert run.status == "completed" and run.decision_steps == 3
     assert [event.call.tool_name for event in run.state.history] == ["inspect_directory", "inspect_oszicar"]
-    assert "OSZICAR 字节偏移 1156" in run.answer and "unknown" in run.answer
+    assert "OSZICAR byte offset 1156" in run.answer and "unknown" in run.answer
     repository = RunRepository(tmp_path / "history.sqlite3")
     saved = repository.save(run, "mock")
     record = repository.get(saved.id)
     assert record.run == run
     report = render_markdown(record)
-    assert "OSZICAR 电子迭代与能量摘要" in report
-    assert "零起始字节偏移：1236" in report and "-10.645278" in report
+    assert "OSZICAR electronic iterations and energy summaries" in report
+    assert "zero-based byte offset: 1236" in report and "-10.645278" in report
     assert "https://vasp.at/wiki/index.php/OSZICAR" in report
 
 
@@ -46,16 +46,16 @@ def test_scan_report_compatibility_with_older_history(tmp_path):
         def decide(self, state, tools):
             if not state.history:
                 return ToolCall(tool_name="scan_directory", arguments={"directory": state.directory})
-            return Finish(answer="保留 unknown")
-    run = AgentLoop(Scanner(), create_registry(tmp_path)).run("检查", str(tmp_path))
+            return Finish(answer="Preserve unknown")
+    run = AgentLoop(Scanner(), create_registry(tmp_path)).run("Inspect", str(tmp_path))
     del run.state.history[0].observation.data["oszicar"]
     del run.state.history[0].observation.data["output_comparison"]
     repository = RunRepository(tmp_path / "history.sqlite3")
     saved = repository.save(run, "mock")
     record = repository.get(saved.id)
     report = render_markdown(record)
-    assert "未保存 OSZICAR 解析" in report
-    assert "不符合当前报告视图" not in report
+    assert "did not save OSZICAR parsing" in report
+    assert "does not match the data format of the current report view" not in report
     assert "oszicar" not in record.run.state.history[0].observation.data
 
 
@@ -63,7 +63,7 @@ def test_scan_view_renders_new_observation(tmp_path):
     from vasp_copilot.reports.generator import _observation
     (tmp_path / "OSZICAR").write_bytes(FIXTURE.read_bytes())
     text = "\n".join(_observation("scan_directory", scan_directory(tmp_path)))
-    assert "OSZICAR 电子迭代与能量摘要" in text and "1156" in text
+    assert "OSZICAR electronic iterations and energy summaries" in text and "1156" in text
 
 
 def test_native_tool_call_observation_roundtrip_offline(tmp_path):
@@ -82,8 +82,8 @@ def test_native_tool_call_observation_roundtrip_offline(tmp_path):
         assert message["role"] == "tool" and message["tool_call_id"] == "oszicar_1"
         observation = json.loads(message["content"])
         assert observation["data"]["last_energy_summary"]["evidence"]["byte_offset"] == 1236
-        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "观察到摘要，整体 unknown"}}]}
-    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-only"), transport), create_registry(tmp_path)).run("查看 OSZICAR", str(tmp_path))
+        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Summary observed; overall status unknown"}}]}
+    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-only"), transport), create_registry(tmp_path)).run("Inspect OSZICAR", str(tmp_path))
     assert run.status == "completed" and len(payloads) == 2
 
 

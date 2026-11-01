@@ -1,111 +1,111 @@
-# 验证记录：解析器与在线回答
+# Validation records: Parsers and online answers
 
-> 本文保留各阶段验证记录，文中测试数量属于对应日期，并非当前全量数量。
-> 当前安装与公开样例复现见 [首页](../README.md)，最新在线验收见 [第 14 条记录](online-validation.md)。
+> This document preserves validation records from each stage; test counts belong to their respective dates, not the current full suite.
+> See the [homepage](../README.md) for current installation and public sample reproduction, and [record 14](online-validation.md) for the latest online acceptance.
 
-日期：2026-10-23。
+Date: 2026-10-23.
 
-## 数据来源
+## Data sources
 
-采用 [pymatgen 固定提交的公开测试目录](https://github.com/materialsproject/pymatgen/tree/682bfd855dd89264b0ff8d6bee4815f8834cc5ac/tests/files/io/vasp/fixtures) 中两份 OUTCAR，标题均为 VASP 5.2.12。精确来源及哈希见 tests/fixtures/pymatgen/manifest.json，MIT 许可随样例保留。
+Uses two OUTCAR files from the [public test directories at a pinned pymatgen commit](https://github.com/materialsproject/pymatgen/tree/682bfd855dd89264b0ff8d6bee4815f8834cc5ac/tests/files/io/vasp/fixtures), both headed VASP 5.2.12. Exact sources and hashes are in tests/fixtures/pymatgen/manifest.json; the MIT license is retained with the samples.
 
-## 人工核对的预期观察
+## Manually checked expected observations
 
-| 样例 | IBRION | NSW | 最后离子步编号 | 最后电子步编号 | EDIFF 消息 | 计时标题 | 结构优化停止消息 |
+| Sample | IBRION | NSW | Last ionic step number | Last electronic step number | EDIFF message | Timing header | Structural optimization stopping message |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| static_silicon | -1 | 0 | 1 | 13 | 达到消息 | 有 | 无 |
-| relaxation | 2 | 99 | 3 | 4 | 达到消息 | 有 | 有 |
+| static_silicon | -1 | 0 | 1 | 13 | Reached message | Present | Absent |
+| relaxation | 2 | 99 | 3 | 4 | Reached message | Present | Present |
 
-静态样例没有结构优化停止消息不代表失败。两个样例仍保持总体收敛结论 unknown；本次验证的是解析和证据关联，不是独立复算科学结果。
+Absence of a structural optimization stopping message in the static sample does not imply failure. Both samples retain overall convergence conclusions of unknown; this validates parsing and evidence association, not an independent scientific recalculation.
 
-## 验证覆盖
+## Validation coverage
 
-- 两份完整公开日志各验证一次 SHA-256 和大小，各验证一次参数、迭代消息、标记及证据字节位置：4 项。
-- 从优化日志截断到第 3 个离子步的第 1 个电子步标题，确认不会沿用第 2 个离子步消息：1 项。
-- 追加另一运行的真实标题，确认清空前一运行关联：1 项。
-- 拼接两份完整日志，确认最后标题来自后一个样例且偏移为拼接文件绝对位置：1 项。
-- 真实 OUTCAR 配人工最小 INCAR 的 CLI 集成：1 项。
+- For each complete public log, verify SHA-256 and size once, and parameters, iteration messages, markers, and evidence byte positions once: 4 tests.
+- Truncate the relaxation log at the first electronic-step header of ionic step 3, verifying that the message from ionic step 2 is not reused: 1 test.
+- Append an authentic header from another run and verify that the preceding run association is cleared: 1 test.
+- Concatenate both complete logs, verifying that the last header comes from the latter sample and its offset is absolute within the concatenated file: 1 test.
+- CLI integration using a real OUTCAR with an artificial minimal INCAR: 1 test.
 
-新增 8 项，连同既有 90 项共 98 项。测试均离线运行，依赖仍为现有 pytest、Pydantic 和 Python 标准库，没有安装 pymatgen。
+Adds 8 tests to the existing 90, for 98 total. All run offline, using existing pytest, Pydantic, and Python standard library dependencies; pymatgen was not installed.
 
-## 复现
+## Reproduction
 
-在项目根目录执行：
+Run from the project root:
 
 ```powershell
 & .\.venv\Scripts\python.exe -m pytest tests/test_real_outcar.py -q
 & .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-前者运行 8 项公开样例回归，后者运行当前全部测试（阶段 2 完成时为 98 项，知识检索接入后为 219 项）。缺少样例或完整性测试失败时，检查文件是否齐全及 manifest，勿修改预期哈希掩盖数据变化。
+The first runs 8 public-sample regressions; the second runs all current tests (98 at the end of stage 2, 219 after knowledge retrieval integration). If samples are missing or integrity tests fail, check file completeness and the manifest rather than changing expected hashes to hide data changes.
 
-## 尚未验证
+## Not yet verified
 
-未在本地运行 VASP；未独立确认上游样例的全部计算设置和科学正确性。两个日志同属 VASP 5.2.12，不能代表 VASP 6、不同输出详细程度、分子动力学、响应计算、真实未收敛或异常终止场景。派生截断测试不能替代真实异常日志验证。
+VASP was not run locally, and the full upstream sample settings and scientific correctness were not independently confirmed. Both logs are VASP 5.2.12 and do not represent VASP 6, different output verbosity, molecular dynamics, response calculations, authentic non-convergence, or abnormal termination scenarios. Derived truncation tests cannot replace validation on real abnormal logs.
 
-下一阶段若增加适用范围更强的结论，需补充具有明确来源和模式信息的其他版本及异常日志。
+Stronger conclusions in a subsequent stage require additional versions and abnormal logs with clear sources and calculation-mode information.
 
-## 2026-10-24 用户回传的在线回答
+## Online answer returned by the user on 2026-10-24
 
-测试对象为 public-examples/static_silicon。用户提供 status=completed、decision_steps=4、error 为空及最终回答，没有提供该次完整 state.history。可确认该次运行生成了回答；不能仅凭回答中的工具名称和引用确认精确工具顺序或检索调用。此前网络/协议错误未证明已根治，不能由一次成功推断持续稳定。
+The subject was public-examples/static_silicon. The user provided status=completed, decision_steps=4, an empty error, and the final answer, but not the full state.history. This confirms an answer was generated; tool names and citations in the answer alone cannot confirm precise tool order or retrieval calls. Earlier network/protocol errors were not proven resolved, and one success cannot establish ongoing stability.
 
-人工核对到的积极结果：回答区分程序结束、电子收敛和离子收敛，保留工具的 unknown，并引用了 OUTCAR 的字节位置。日志对应位置与既有公开样例一致。
+Positive manual findings: the answer distinguished program termination, electronic convergence, and ionic convergence, retained tool unknown states, and cited OUTCAR byte positions. The corresponding log positions matched the existing public sample.
 
-发现的问题与修正要求：
+Problems and required corrections:
 
-| 问题 | 正确边界 |
+| Problem | Correct boundary |
 | --- | --- |
-| “若为优化则显然未完成” | 未发现离子停止标记不能证明优化未完成或失败；条件句也不能绕过证据要求 |
-| 将 reached_marker 的保守处理归到 VASP Wiki | 这是本项目策略；官方参数说明与项目使用限制必须分别归属，摘要不是官方逐字引语 |
-| 目录名 static 和最后 Iteration 1 被用于推断类型/总步数 | 目录名不能作为科学证据，last_iteration 只给最后识别编号，不提供全文件迭代统计 |
-| 因 INCAR 缺失断言无法取得 IBRION/NSW | 现有 scan_directory 的 output_context 可以提取 OUTCAR 前缀采样参数；本样例中明确存在 IBRION=-1、NSW=0 |
-| 声称采样没有覆盖全文件 | 该样例为 61474 字节，小于尾部读取上限；读入全文与完成全部语义解析不同，后者仍未实现 |
-| 把 EDIFF 消息直接解释为物理条件已验证 | 现有工具只验证看到了消息，不重算能量变化，也未验证所有模式 |
+| “If this is an optimization, it is obviously unfinished” | An absent ionic stopping marker does not prove unfinished optimization or failure; conditional wording cannot bypass evidence requirements |
+| Attributing conservative reached_marker handling to VASP Wiki | This is project policy; official parameter explanations and project limits require separate attribution, and summaries are not official verbatim quotations |
+| Inferring calculation type/total steps from the directory name static and final Iteration 1 | Directory names are not scientific evidence; last_iteration supplies only the last recognized number, not full-file iteration statistics |
+| Claiming IBRION/NSW cannot be obtained because INCAR is missing | Existing scan_directory output_context can extract OUTCAR prefix parameters; this sample explicitly contains IBRION=-1 and NSW=0 |
+| Claiming sampling did not cover the entire file | This sample is 61474 bytes, below the tail-read limit; reading all bytes differs from complete semantic parsing, which remains unimplemented |
+| Treating an EDIFF message as verification of physical conditions | Current tools verify only that a message was observed; they do not recompute energy changes or validate all modes |
 
-对应修改：收紧 DeepSeek 系统提示，要求需要判定模式时先检查 OUTCAR 采样参数；知识工具 notice 明确来源归属。没有放宽 unknown 状态，也没有修改科学解析规则。提示词只能引导回答，不能替代自动事实校验。
+Corresponding changes: tightened the DeepSeek system prompt to require checking sampled OUTCAR parameters before determining the mode; the knowledge-tool notice explicitly states source attribution. unknown states were not relaxed and scientific parsing rules did not change. Prompts guide answers but cannot replace automated fact-checking.
 
-下一次在线验收需保存最终回答及工具调用顺序，确认上述问题不再出现，尤其检查 scan_directory 的参数观察是否被正确引用。修改后的在线效果尚未验证。
+The next online acceptance must save both the final answer and tool order and check that these problems do not recur, especially whether scan_directory parameter observations are cited correctly. Online effects of the changes had not yet been verified.
 
-本轮修改后执行模型适配和知识检索回归，实际输出 `78 passed in 1.43s`，未重复运行其余测试。另用现有 scan_directory 核对：NSW=0 的证据位于 OUTCAR 字节偏移 10918，IBRION=-1 位于 11031；尾部诊断 read_start=0、bytes_read=snapshot_size=61474。全部操作离线，没有改动样例。
+After this round's changes, model-adapter and knowledge-retrieval regression returned `78 passed in 1.43s`; other tests were not rerun. Existing scan_directory also verified NSW=0 evidence at OUTCAR byte 10918, IBRION=-1 at 11031, and tail diagnostic read_start=0 with bytes_read=snapshot_size=61474. All operations were offline and samples were unchanged.
 
-## 离线 Agent 场景评估（2026-10-24）
+## Offline Agent scenario evaluation (2026-10-24)
 
-2026-10-25 已取得另一轮完整的 DeepSeek 在线记录：2 次决策、1 次 scan_directory，没有知识检索；答案存在虚称检索、字段和数量错误、采样范围过度推断。接口运行完成但质量验收未通过。具体记录、修正与下一轮用户复验见 [在线验收](online-validation.md)。以下固定 Mock 评估不能替代该验收。
+Another complete DeepSeek online record was obtained on 2026-10-25: 2 decisions and 1 scan_directory call, without knowledge retrieval. The answer falsely claimed retrieval, contained field/count errors, and overinterpreted the sampling range. API execution completed but quality acceptance failed. See [Online validation](online-validation.md) for the record, corrections, and next user revalidation. The fixed Mock evaluation below cannot replace that acceptance.
 
-当前为 `mock-agent-v2` 评估集，把散布在单元测试中的关键行为串成可独立运行、可保存结果的固定场景。它保留 v1 的 9 个场景，新增 OSZICAR 和双日志的 7 个场景，共 16 个。它复用真实 AgentLoop、工具注册表、文件解析和本地检索，不依赖 pytest、API Key 或网络。评估对象是当前 Mock 策略；自然语言问题不会改变 Mock 的决策。既有 v1 报告仍是历史记录，不会被本次评估覆盖。
+The current suite, `mock-agent-v2`, joins key behaviors scattered across unit tests into fixed, independently runnable scenarios with savable results. It retains v1's 9 scenarios and adds 7 OSZICAR/two-log scenarios, totaling 16. It reuses real AgentLoop, the tool registry, file parsers, and local retrieval without pytest, an API key, or a network connection. It evaluates the current Mock policy; natural-language questions do not alter Mock decisions. Existing v1 reports remain historical and are not overwritten by this evaluation.
 
-| 场景 | 数据来源 | 预期行为 |
+| Scenario | Data source | Expected behavior |
 | --- | --- | --- |
-| static_silicon | 固定版本公开 OUTCAR | 检查→解析→EDIFF 检索→回答；保留整体 unknown |
-| relaxation | 固定版本公开 OUTCAR | 同时检索 EDIFF 与 EDIFFG，保留对应证据 |
-| truncated_output | relaxation 前 81109 字节，人工截断 | 最后识别 3(1)，无该步 EDIFF 消息，不沿用上一步 |
-| incar_only | 人工构造 IBRION=2、NSW=20 | 选择 inspect_incar，输出输入意图 relaxation |
-| invalid_incar | 人工构造无效 UTF-8 | 保留 UnicodeDecodeError 与 unknown |
-| empty_directory | 人工构造空目录 | 一次文件检查后结束，不调用不存在的文件解析 |
-| missing_directory | 人工构造缺失路径 | 保留 execution_error / FileNotFoundError 并结束 |
-| step_limit | 公开静态样例，预算仅一步 | max_steps，保留一次观察，不生成最终回答 |
-| backend_failure | 在第二次决策注入 RuntimeError | backend_error，保留第一次观察，不生成最终回答 |
-| oszicar_only | 固定版本公开 OSZICAR | 选择 inspect_oszicar，核对电子行、能量摘要和原文 |
-| paired_outputs | 固定版本公开 OUTCAR / OSZICAR 配对 | 选择 scan_directory；离子编号 1/1、电子编号 13/13，matched |
-| ionic_mismatch | 人工将 OSZICAR 摘要编号 1 改为 2 | 离子编号 mismatched；即使电子编号 13/13 也保持 unknown |
-| electronic_mismatch | 人工将最后电子编号 13 改为 12 | 离子编号 matched、电子编号 mismatched |
-| truncated_oszicar | 人工删除 OSZICAR 最后一字节换行 | 清除旧候选并保留 issues；两个核对项均 unknown |
-| missing_oszicar_summary | 人工在 OSZICAR 字节 1236 前截断 | 保留电子行，缺少摘要；不推算离子编号，两项 unknown |
-| unsupported_oszicar | 人工在完整 OSZICAR 后追加 MD 形式记录 | 当前解析器不支持该格式，清除此前候选并保留 unknown |
+| static_silicon | Pinned public OUTCAR | Inspect → parse → EDIFF retrieval → answer; retain overall unknown |
+| relaxation | Pinned public OUTCAR | Retrieve both EDIFF and EDIFFG, retaining corresponding evidence |
+| truncated_output | First 81109 bytes of relaxation, artificially truncated | Last recognized 3(1), no EDIFF message for that step; do not reuse the previous step |
+| incar_only | Artificial IBRION=2, NSW=20 | Choose inspect_incar; output input intent relaxation |
+| invalid_incar | Artificial invalid UTF-8 | Retain UnicodeDecodeError and unknown |
+| empty_directory | Artificial empty directory | Finish after one file inspection without parsing nonexistent files |
+| missing_directory | Artificial missing path | Retain execution_error / FileNotFoundError and finish |
+| step_limit | Public static sample, one-decision budget | max_steps; retain one observation without a final answer |
+| backend_failure | RuntimeError injected at decision 2 | backend_error; retain the first observation without a final answer |
+| oszicar_only | Pinned public OSZICAR | Choose inspect_oszicar; check electronic line, energy summary, and original text |
+| paired_outputs | Pinned public OUTCAR / OSZICAR pair | Choose scan_directory; ionic numbers 1/1, electronic numbers 13/13, matched |
+| ionic_mismatch | Artificially replace OSZICAR summary number 1 with 2 | Ionic numbers mismatched; electronic comparison remains unknown even with 13/13 |
+| electronic_mismatch | Artificially replace last electronic number 13 with 12 | Ionic numbers matched, electronic numbers mismatched |
+| truncated_oszicar | Artificially remove the final OSZICAR newline byte | Clear old candidates, retain issues; both checks unknown |
+| missing_oszicar_summary | Artificially truncate OSZICAR before byte 1236 | Retain electronic line without summary; do not infer ionic number; both checks unknown |
+| unsupported_oszicar | Artificially append an MD-format record to complete OSZICAR | Current parser does not support it; clear old candidates and retain unknown |
 
-通过意味着满足场景预期。例如 backend_failure 的场景 status=passed，表示检测到了预期的 backend_error 并保留历史，不表示后端实际成功。
+Passing means meeting the scenario's expectations. For example, backend_failure status=passed means the expected backend_error was detected and history retained, not that the backend succeeded.
 
-### 实际检查内容
+### What is checked
 
-共同检查运行状态、决策次数、工具顺序、工具错误、历史步号、问题和目录是否保留、回答是否存在，以及运行前后的文件指纹。OUTCAR 场景另外检查最后迭代、标记状态、采样覆盖、证据数量、字节位置与原文是否对应、三个整体结论是否保持 unknown。INCAR 场景检查输入类型、参数和原始行；检索检查预期文档、来源 URL、reference 标签，以及回答是否包含来源 URL。
+Common checks cover run status, decision count, tool order, tool errors, history step numbers, retention of question and directory, answer presence, and file fingerprints before/after. OUTCAR scenarios also check the last iteration, marker states, sampling coverage, evidence count, correspondence of byte positions to original text, and retention of all three overall unknown conclusions. INCAR scenarios check input type, parameters, and raw lines; retrieval checks expected documents, source URLs, reference labels, and source URLs in the answer.
 
-OSZICAR 场景检查保留行的编号、各数值、原文位置、采样范围、错误与 issues 是否存在，以及整体结论仍为 unknown。双日志场景还检查比较汇总、每项编号与状态、双方证据和非空原因；run_identity 必须为 unknown。即使最终回答正常产生，数值或证据有误仍判为失败。原因文字仅检查存在性，不自动评判其自然语言含义。
+OSZICAR scenarios check retained line numbers, numeric values, original-text positions, sampling range, errors/issues, and overall unknown conclusions. Two-log scenarios additionally check overall comparison, each item's numbers/status, evidence from both sides, and nonempty reasons; run_identity must remain unknown. Incorrect numbers or evidence fail even if a final answer was produced normally. Reasons are checked only for presence, not their natural-language meaning.
 
-报告带有固定样例提交号与 SHA-256：两个 OUTCAR 解压后内容，以及已有的 static_silicon.OSZICAR（1314 字节）。评估首先按固定文件名有限读取并核验大小和哈希；任一样例缺失或改变时拒绝开始。预期值与偏移沿用已人工核对的公开日志，截断位置也直接核对原始字节。公开数据仍保留原有许可和 manifest，不下载新增数据集。
+Reports include the pinned sample commit and SHA-256 hashes for both decompressed OUTCAR files and existing static_silicon.OSZICAR (1314 bytes). Evaluation first performs bounded reads of fixed filenames and verifies sizes/hashes; it refuses to start if any sample is missing or changed. Expected values and offsets follow the manually inspected public logs, and truncation positions were also checked directly against original bytes. Public data retains its license and manifest; no new dataset is downloaded.
 
-评分只使用保存的观察、固定预期和场景原始字节，不重新调用被测解析器来生成“正确答案”。独立 OSZICAR 工具与 scan_directory 内的同类观察共用评分逻辑，保证完整扫描不会绕开证据检查。每次运行仍核验临时输入副本未被修改。
+Scoring uses only saved observations, fixed expectations, and original scenario bytes, without calling the parser under test again to generate a “correct answer.” Standalone OSZICAR-tool observations and equivalent scan_directory observations share scoring logic so a complete scan cannot bypass evidence checks. Each run also verifies that temporary input copies remain unchanged.
 
-### PowerShell 运行
+### Run in PowerShell
 
 ```powershell
 Set-Location D:\projects\vasp-copilot
@@ -115,39 +115,39 @@ $evaluation | Format-List suite, status, total, passed, failed
 $evaluation.cases | Format-Table name, status
 ```
 
-前两行确定项目和源码路径，第三行运行评估并把 JSON 转为 PowerShell 对象，最后两行显示汇总与场景列表。预期汇总为 mock-agent-v2 / passed / 16 / 16 / 0。正常场景在临时目录中完成并自动清理，不会写入诊断历史库。
+The first two lines set project/source paths; the third runs evaluation and converts JSON to a PowerShell object; the last two show the summary and scenario list. Expect mock-agent-v2 / passed / 16 / 16 / 0. Normal scenarios run in automatically cleaned temporary directories and do not write diagnostic history.
 
-需要保存详细结果时，选择尚不存在的输出文件：
+To save detailed results, choose a destination that does not yet exist:
 
 ```powershell
 $evaluation = & .\.venv\Scripts\python.exe -m vasp_copilot.evaluation --output 'reports\generated\my-evaluation.json' | ConvertFrom-Json
 $evaluation.cases | Where-Object status -ne 'passed' | ConvertTo-Json -Depth 20
 ```
 
-第一行同时保存 UTF-8 JSON 与返回结果；第二行展开失败场景，没有失败则不输出。每个检查项的 name 表示检查内容，expected 是预期值，actual 是本次实际值。文件名可以自行修改，重复使用已有路径会拒绝覆盖。
+The first line both saves UTF-8 JSON and returns results; the second expands failed scenarios, with no output when none fail. Each check's name identifies its subject, expected is the expected value, and actual is this run's value. Choose any filename; existing paths are never overwritten.
 
-| 退出码 / 错误 | 含义与处理 |
+| Exit code / error | Meaning and action |
 | --- | --- |
-| 0 | 全部场景符合预期 |
-| 1 | 至少一个场景未通过或运行中异常；查看失败检查项与 case.error |
-| 2、fixture_error | 样例缺失或哈希不同；核对 --fixtures 路径和原始样例，不要改哈希掩盖问题 |
-| 2、evaluation_output_error | 输出已存在或无法写入；选择新 .json 文件或可写目录 |
-| 2、evaluation_error | 临时目录等基础文件操作失败；检查本地权限与空间 |
+| 0 | All scenarios meet expectations |
+| 1 | At least one scenario failed or raised an exception; inspect failed checks and case.error |
+| 2, fixture_error | Samples missing or hashes differ; check --fixtures and original samples rather than altering hashes |
+| 2, evaluation_output_error | Destination exists or cannot be written; choose a new .json file or writable directory |
+| 2, evaluation_error | Basic file operation failed, such as temporary-directory creation; check local permissions and space |
 
-命令需要完整源码仓库中的 tests/fixtures/pymatgen；测试数据没有打入 Python 安装包。从其他工作目录运行时添加 `--fixtures 'D:\projects\vasp-copilot\tests\fixtures\pymatgen'`。主入口只导入 Mock 与评估功能，不加载模型配置；默认抑制预期异常场景的日志，检查结果和错误仍在 JSON 中。
+The command needs tests/fixtures/pymatgen from the full source repository; test data is not included in the Python package. From another working directory add `--fixtures 'D:\projects\vasp-copilot\tests\fixtures\pymatgen'`. The entry point imports only Mock and evaluation functionality, without loading model configuration. Expected-exception logs are suppressed by default, while check results and errors remain in JSON.
 
-### 源码阅读与验证
+### Source reading and validation
 
-先读 evaluation/cases.py 的 Scenario、build_scenarios() 和 _output_scenarios()，理解“输入、预期、来源”如何描述一个场景；再读 runner.py 的 run_scenario() 和 check_run()，理解“执行与评分分离”；observations.py 专门核对保存的 OSZICAR 与比较观察，_evidence_valid() 检查证据是否指向原始文件中的完整行；最后读 __main__.py 的输出和退出码处理。__init__.py 仅说明包职责。
+First read Scenario, build_scenarios(), and _output_scenarios() in evaluation/cases.py to understand how inputs, expectations, and sources describe a scenario. Then read run_scenario() and check_run() in runner.py to understand separation of execution and scoring. observations.py specifically checks saved OSZICAR and comparison observations; _evidence_valid() verifies evidence points to complete original-file lines. Finally read __main__.py's output and exit-code handling. __init__.py only describes package responsibilities.
 
-v1 新增的 22 项测试保留，包括故意篡改证据偏移、证据文字、证据数量、工具顺序、整体状态、引用来源、回答引用、输入文件和问题的 9 类故障。另验证样例损坏/超限、离线可重复性、不读取模型配置、单场景异常后继续、KeyboardInterrupt 传播、输出文件不覆盖及失败写入清理。
+The 22 tests added for v1 remain, including 9 fault categories deliberately tampering with evidence offsets, evidence text, evidence count, tool order, overall status, reference sources, answer citations, input files, and questions. They also verify corrupt/oversized samples, offline reproducibility, no model-configuration reads, continuing after a single-scenario exception, KeyboardInterrupt propagation, no output overwrite, and cleanup after failed writes.
 
-v1 阶段完整测试为 `312 passed in 10.08s`。v2 增加 tests/test_evaluation_outputs.py：20 类完整扫描结果篡改、4 个将不确定结果擅自改为 matched 的场景、4 类 OSZICAR 样例缺失或损坏，以及评分不重读文件、不调用解析器和场景字节变换检查，共新增 30 项测试。
+The full suite at v1 was `312 passed in 10.08s`. v2 adds tests/test_evaluation_outputs.py: 20 categories of complete-scan-result tampering, 4 scenarios improperly promoting uncertain results to matched, 4 OSZICAR missing/corrupt sample cases, plus checks that scoring neither rereads files nor calls parsers and that scenario byte transformations are correct, totaling 30 new tests.
 
-2026-10-25 完成 v2 验证：定向测试 `52 passed in 34.64s`，完整测试 `413 passed in 52.94s`，固定场景 16/16 通过。重复运行得到相同报告，原始样例保持不变。全部离线，无新依赖，没有运行 VASP 或调用 DeepSeek。
+v2 validation completed on 2026-10-25: targeted tests `52 passed in 34.64s`, full suite `413 passed in 52.94s`, and fixed scenarios 16/16 passed. Repeated runs produced identical reports and original samples remained unchanged. All offline, without new dependencies, VASP execution, or DeepSeek calls.
 
-### 解释限制
+### Interpretation limits
 
-16/16 是这十六个固定场景的通过数，不是现实计算成功率或 LLM 准确率。人工改编号、截断、追加格式、解码错误和注入异常不是真实 VASP 失败日志；仍缺少多版本、多模式和真实异常样本。编号相同不证明运行归属或收敛；不同也不确定失败或原因。包含来源 URL 不代表自然语言推断正确，评估不检查引文含义、回答是否过度断言或所有科学结论。先前在线回答发现的问题仍需真实模型复验。
+16/16 counts passes for these sixteen fixed scenarios; it is not a real-world calculation success rate or LLM accuracy. Artificial number changes, truncations, appended formats, decoding errors, and injected exceptions are not authentic VASP failure logs; multiple versions/modes and real abnormal samples remain missing. Matching numbers do not establish run identity or convergence; differences do not establish failure or cause. Including a source URL does not establish correct natural-language inference. Evaluation does not check citation meaning, answer overstatements, or all scientific conclusions. Problems found in earlier online answers still require real-model revalidation.
 
-Mock 顺序或工具契约有意改变时，应先核实新行为的理由，再人工更新预期并修改 suite 版本，不能用当前输出自动刷新基准。
+If Mock order or tool contracts deliberately change, first verify the rationale, then manually update expectations and the suite version; do not automatically refresh the baseline from current output.

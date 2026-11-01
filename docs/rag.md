@@ -1,55 +1,55 @@
-# 阶段 4：本地知识检索与 Agent
+# Stage 4: Local knowledge retrieval and the Agent
 
-search_knowledge 工具读取随包分发的八篇 Markdown 短文，不联网，不需要 API Key，不使用向量数据库，也不改变现有科学诊断规则。
+search_knowledge reads eight short English Markdown notes bundled with the package. It does not access the network, require an API key, use a vector database, or change existing scientific diagnostic rules.
 
-## 文件证据与知识依据
+## File evidence and knowledge references
 
-文件工具回答“这个目录里实际看到了什么”；知识工具回答“这些术语通常是什么意思”。OUTCAR 某一字节位置的 EDIFF 消息是文件证据；EDIFF 的含义来自参考资料。检索到收敛条件不等于证明本次运行收敛。
+File tools answer “what was actually observed in this directory”; the knowledge tool answers “what these terms generally mean.” An EDIFF message at a particular OUTCAR byte position is file evidence; the meaning of EDIFF comes from reference material. Retrieving convergence conditions does not prove that this run converged.
 
-短文为本项目摘要而非官方全文，2026-10-23 核对来源：[OUTCAR](https://vasp.at/wiki/index.php/OUTCAR)、[EDIFF](https://vasp.at/wiki/index.php/EDIFF)、[EDIFFG](https://vasp.at/wiki/index.php/EDIFFG)；2026-10-26 增补并核对 [OSZICAR](https://vasp.at/wiki/index.php/OSZICAR)；2026-10-28 增补 [INCAR](https://vasp.at/wiki/index.php/INCAR) 设置与输出核对，并新增 [NELM](https://vasp.at/wiki/index.php/NELM) 自洽异常排查说明；2026-10-30 补充 [ICHARG](https://vasp.at/wiki/index.php/ICHARG)、[ALGO/IALGO](https://vasp.at/wiki/index.php/ALGO) 的设置语境，并更新 NELM 条目的项目限制以反映新解析能力。每篇区分“官方资料摘要”和“本项目使用限制”。八篇文档仍不能回答所有 VASP 问题。
+The notes are project summaries, not full official texts. Sources checked on 2026-10-23: [OUTCAR](https://vasp.at/wiki/index.php/OUTCAR), [EDIFF](https://vasp.at/wiki/index.php/EDIFF), and [EDIFFG](https://vasp.at/wiki/index.php/EDIFFG). [OSZICAR](https://vasp.at/wiki/index.php/OSZICAR) was added and checked on 2026-10-26. On 2026-10-28, [INCAR](https://vasp.at/wiki/index.php/INCAR) settings and output comparison were added, along with [NELM](https://vasp.at/wiki/index.php/NELM) guidance on investigating self-consistency anomalies. On 2026-10-30, setting context for [ICHARG](https://vasp.at/wiki/index.php/ICHARG) and [ALGO/IALGO](https://vasp.at/wiki/index.php/ALGO) was added, and the NELM note's project limits were updated to reflect new parsing capabilities. Each note distinguishes “Official-source summary” from “Project policy.” Eight notes still cannot answer every VASP question.
 
-OSZICAR 条目针对第 7 次在线运行暴露的参考缺口：解释电子行与摘要字段，并将跨文件编号比较策略明确归属本项目。原查询“OUTCAR OSZICAR 步编号 对齐 离子步 iteration 对应关系”现在可命中 OSZICAR 与 OUTCAR 两篇。该结果只验证检索覆盖；模型是否正确、简洁地引用仍由用户在线复验，不用离线测试代替。
+The OSZICAR note addresses the reference gap exposed by online run 7: it explains electronic-line and summary fields and explicitly attributes the cross-file step-comparison policy to this project. The original query, translated as “OUTCAR OSZICAR step numbers alignment ionic step iteration correspondence,” can now retrieve both OSZICAR and OUTCAR notes. This verifies retrieval coverage only; whether the model cites them correctly and concisely still requires the user's online revalidation, not a substitute offline test.
 
-## 文件与阅读顺序
+## Files and reading order
 
-1. `src/vasp_copilot/rag/knowledge/electronic.md`：知识条目示例。前四行依次为标题、Source、Keywords、Reviewed，第五行留空，第六行起是正文。关键词用英文逗号分隔。
-2. `src/vasp_copilot/rag/retriever.py`：SearchKnowledgeArgs 校验问题和 top_k；KnowledgeRetriever.search() 有限读取文档、匹配关键词、排序并返回 KnowledgeHit。每篇短文作为一个片段；行号指向本地正文，并非官网行号。
-3. `src/vasp_copilot/tools/knowledge_search.py`：把检索注册为统一工具。参数只有 query 和 top_k，模型不能指定任意文件路径。
-4. `src/vasp_copilot/tools/file_inspection.py`：create_registry() 在文件工具之外注册 search_knowledge。
-5. `src/vasp_copilot/agent/mock.py`：读到 OUTCAR 后根据观察选择检索词，再合并证据说明和来源引用。AgentLoop 无需了解检索实现。
-6. `tests/test_knowledge_search.py`：检索边界、来源追溯、观察驱动的主题选择、错误和 CLI 验收。
+1. `src/vasp_copilot/rag/knowledge/electronic.md`: example knowledge entry. The first four lines are title, Source, Keywords, and Reviewed; line five is blank, and the body starts on line six. Keywords are separated by English commas.
+2. `src/vasp_copilot/rag/retriever.py`: SearchKnowledgeArgs validates the question and top_k; KnowledgeRetriever.search() performs bounded document reads, keyword matching, ranking, and returns KnowledgeHit. Each note is one excerpt; line numbers refer to the local body, not the official website.
+3. `src/vasp_copilot/tools/knowledge_search.py`: registers retrieval as a common tool. The only arguments are query and top_k; the model cannot specify arbitrary file paths.
+4. `src/vasp_copilot/tools/file_inspection.py`: create_registry() registers search_knowledge alongside file tools.
+5. `src/vasp_copilot/agent/mock.py`: after reading OUTCAR, chooses search terms from observations, then combines evidence explanations and source citations. AgentLoop need not know the retrieval implementation.
+6. `tests/test_knowledge_search.py`: retrieval boundaries, source traceability, observation-driven topic selection, errors, and CLI acceptance.
 
-pyproject.toml 将 Markdown 声明为包数据；importlib.resources 定位内置文档，因此不依赖当前终端目录。root 只作为 Python 开发者/测试注入点，不出现在工具参数中。
+pyproject.toml declares Markdown as package data; importlib.resources locates bundled documents independently of the current terminal directory. root is only a Python developer/test injection point, not a tool argument.
 
-## 检索机制与边界
+## Retrieval mechanism and boundaries
 
-- 中文关键词按子串匹配，英文和参数名忽略大小写并检查词边界；EDIFF 不会误匹配 EDIFFG。
-- score 是命中的不同关键词数量，只用于排序，不是置信度或科学正确性概率。相同分数按文件名排序。
-- query 最长 500 字符，不能为空白；top_k 为 1–5 的整数，默认 3。无命中返回空 hits，不编造引用。
-- 最多 32 篇文档，每篇最多读取 16 KiB 加一个探测字节，正文最多 4000 字符。超限、编码或元数据损坏会成为工具 execution_error，避免静默忽略损坏条目。
-- 返回 document、title、source、reviewed_on、excerpt、line_start、line_end、score、matched_keywords；evidence_type 固定为 reference。
-- 新结果另含 sections，每段保留 text、line_start/line_end、kind、citation 和 source_url。official_summary 表示有明确标签的官网摘要（项目转述），source_url 指向该笔记声明的官网；project_policy 表示项目限制，只带 VASP-Copilot 笔记与本地行号的 citation，source_url=null。未识别标签的段落记为 unclassified，不提升为官网解释。
-- reference_sections() 按空行分段并读取段首标签，行号与原始正文逐字对应；它只识别策划笔记中的标签，不自动验证陈述是否得到官网支持。新条目仍需人工核对。原有 excerpt/source 保留以兼容已有消费者，source 字段不代表支持整篇笔记中的项目规则。
-- 报告按保存时的 sections 分别展示官网摘要和项目限制；旧命中没有 sections 时默认空列表，显示原片段与原来源并说明缺少分段归属，不用当前文档补写历史。新版字段通过现有工具观察进入模型和 SQLite，无需数据库迁移；自然语言最终引用是否正确仍需在线验收。
-- 这是关键词检索，不是语义理解；未收录的同义词可能没有命中。新增主题时需补充来源、适用范围、别名和测试。
-- 没有自动抓取网页、下载资料或执行文档中的指令。真实模型是否正确使用引用仍需人工验收，提示词不是事实核验器。
+- Legacy Chinese query aliases use substring matching; note metadata is now in English. English words and parameter names are matched case-insensitively with word boundaries, so EDIFF does not spuriously match EDIFFG.
+- score counts distinct matched keywords and is used only for ranking, not as confidence or a probability of scientific correctness. Ties are sorted by filename.
+- query is limited to 500 characters and cannot be blank; top_k is an integer from 1–5, default 3. No match returns empty hits rather than invented citations.
+- At most 32 documents; each read is limited to 16 KiB plus one probe byte, and the body to 4000 characters. Size-limit violations, encoding errors, or corrupt metadata become tool execution_error rather than silently skipping damaged entries.
+- Returns document, title, source, reviewed_on, excerpt, line_start, line_end, score, and matched_keywords; evidence_type is always reference.
+- New results also contain sections, each preserving text, line_start/line_end, kind, citation, and source_url. official_summary denotes an explicitly labeled official-source summary, paraphrased by the project, with source_url pointing to the official source declared by the note. project_policy denotes project limits, with only a VASP-Copilot note/local-line citation and source_url=null. Unrecognized labels produce unclassified sections, not official explanations.
+- reference_sections() splits at blank lines and reads initial labels; line numbers correspond exactly to the original body. It recognizes labels in curated notes without automatically verifying that statements are supported by the official website. New entries still require manual review. Existing excerpt/source fields remain for compatibility; source does not imply support for the entire note's project rules.
+- Reports display official-source summaries and project policies separately using saved sections. Old hits without sections default to an empty list, displaying the original excerpt and source while noting missing section attribution; current documents do not backfill history. New fields reach the model and SQLite through existing tool observations without database migration. Correct natural-language final citations still require online acceptance.
+- This is keyword retrieval, not semantic understanding; unlisted synonyms may yield no hits. New topics require sources, scope, aliases, and tests.
+- No automatic web scraping, document downloads, or execution of instructions in documents. Whether real models use citations correctly still requires manual acceptance; prompts are not fact-checkers.
 
-## Mock 新流程
+## New Mock flow
 
 ```text
 inspect_directory
-  ├─ OUTCAR 可读 → diagnose_outcar
-  │    ├─ 解析报告错误 → 解释错误并结束
-  │    └─ 获得观察 → search_knowledge → 分开呈现文件证据与通用解释
-  ├─ 仅 INCAR 可读 → inspect_incar → 解释输入意图
-  └─ 均不可读 → 解释证据不足
+  ├─ OUTCAR readable → diagnose_outcar
+  │    ├─ Parse report error → explain error and finish
+  │    └─ Observation obtained → search_knowledge → present file evidence and general explanations separately
+  ├─ Only INCAR readable → inspect_incar → explain input intent
+  └─ Neither readable → explain insufficient evidence
 ```
 
-电子消息状态不是 unknown 时检索 EDIFF；观察到离子停止标记时检索 EDIFFG；两者同时出现则查询两个主题；都没有时查询 OUTCAR。知识检索失败或无命中时，保留文件观察并说明参考资料不可用。
+Search EDIFF when the electronic message status is not unknown; search EDIFFG when an ionic stopping marker is observed; query both when both appear; otherwise query OUTCAR. If retrieval fails or returns no hits, retain file observations and explain that references are unavailable.
 
-Mock 仍是固定条件策略，不理解用户自然语言。标准 OUTCAR 分支需要 4 次决策（检查、解析、检索、最终回答），INCAR 分支 3 次，空目录 2 次；默认上限 6 足够。DeepSeek 能看到同一工具定义，但由模型按需选择，流程可能不同。
+Mock remains a fixed conditional test policy and does not understand natural language. The standard OUTCAR branch takes 4 decisions (inspect, parse, retrieve, final answer), the INCAR branch 3, and an empty directory 2; the default limit of 6 is sufficient. DeepSeek sees the same tool definitions but selects as needed, so its flow may differ.
 
-## PowerShell 离线验收
+## Offline acceptance in PowerShell
 
 ```powershell
 Set-Location D:\projects\vasp-copilot
@@ -59,31 +59,31 @@ $result | Format-List status, decision_steps, answer, error
 $result.state.history | ForEach-Object { $_.call.tool_name }
 ```
 
-前两行定位项目并设置源码搜索路径；第三行运行默认离线 Mock，并把 JSON 转成 PowerShell 对象。第四行显示可读中文回答，第五行查看工具顺序。预期 status=completed、decision_steps=4，顺序为 inspect_directory、diagnose_outcar、search_knowledge。completed 仅表示完成回答，总体科学状态保持 unknown。
+The first two lines locate the project and set the source search path; the third runs default offline Mock and converts JSON to a PowerShell object. The fourth displays the readable answer (Chinese in this historical validation); the fifth shows tool order. Expect status=completed, decision_steps=4, and inspect_directory, diagnose_outcar, search_knowledge in order. completed means only that an answer was produced; overall scientific states remain unknown.
 
-可将 static_silicon 改成 relaxation 比较两个样例。不要为运行演示改动原始 INCAR 或 OUTCAR。
+Replace static_silicon with relaxation to compare the samples. Do not modify original INCAR or OUTCAR files for the demo.
 
-## 在线验收
+## Online acceptance
 
-在已经设置 DEEPSEEK_API_KEY 的同一个终端、完成上述前两行后执行：
+In the same terminal with DEEPSEEK_API_KEY configured, after running the first two lines above:
 
 ```powershell
-$result = & .\.venv\Scripts\python.exe -m vasp_copilot 'D:\projects\vasp-copilot\data\local\public-examples\static_silicon' --agent --backend deepseek --question '请先检查目录和 OUTCAR，再使用 search_knowledge 查询相关解释。回答中分别列出文件证据、参考来源和仍不确定的事项。' --max-steps 6 | ConvertFrom-Json
+$result = & .\.venv\Scripts\python.exe -m vasp_copilot 'D:\projects\vasp-copilot\data\local\public-examples\static_silicon' --agent --backend deepseek --question 'First inspect the directory and OUTCAR, then use search_knowledge for relevant explanations. List file evidence, reference sources, and remaining uncertainties separately.' --max-steps 6 | ConvertFrom-Json
 $result | Format-List status, decision_steps, answer, error
 $result.state.history | ForEach-Object { $_.call.tool_name }
 ```
 
-这会产生真实 API 用量。验收时检查：是否使用文件工具和 search_knowledge、是否引用具体文件位置及知识来源、是否把通用资料误当作本次收敛证明。2026-10-24 用户回传了一次 completed 回答，但未附完整工具历史；人工复核发现回答质量问题，详见 evaluation.md。不能仅由最终回答引用 EDIFF 就认定实际调用过 search_knowledge。
+This incurs real API usage. Check whether file tools and search_knowledge were used, whether specific file positions and knowledge sources are cited, and whether general references are mistaken for proof of this run's convergence. On 2026-10-24 the user returned a completed answer without the full tool history; manual review found answer-quality issues, detailed in evaluation.md. An EDIFF citation in the final answer alone cannot establish that search_knowledge was actually called.
 
-来源归属也需要验收：“官方资料摘要”是项目转述，不能当作官方逐字引语；“本项目使用限制”属于 VASP-Copilot 的实现策略，不能归因于官方来源。知识工具 notice 和模型提示已明确这一点，但仍需核对真实回答。
+Source attribution also requires acceptance: “Official-source summary” is the project's paraphrase, not an official verbatim quotation; “Project policy” is VASP-Copilot's implementation policy and must not be attributed to the official source. The knowledge-tool notice and model prompt make this explicit, but real answers still need checking.
 
-## 测试
+## Tests
 
 ```powershell
 & .\.venv\Scripts\python.exe -m pytest tests/test_knowledge_search.py tests/test_agent_loop.py tests/test_deepseek.py -q
 & .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-覆盖中英文查询、参数词边界、无命中、排序和 top_k、非法参数、有限读取、来源与正文行号、检索失败保留证据、CLI 离线运行，以及通过假 DeepSeek 传输验证原生工具调用的检索结果回传。不发送真实 API 请求。
+Covers Chinese/English queries, parameter word boundaries, no hits, ranking and top_k, invalid arguments, bounded reading, source and body line numbers, evidence retention after retrieval failures, CLI offline runs, and retrieval-result return through native tool calls using fake DeepSeek transport. No real API requests are sent.
 
-本阶段开发验证记录（2026-10-23）：完整测试实际输出 `219 passed in 2.91s`。static_silicon 与 relaxation 两份公开样例均在 4 次决策内 completed，分别检索到电子说明和电子/离子说明；运行前后样例文件 SHA-256 一致。项目虚拟环境缺少 setuptools，首次离线构建失败；改用系统已有的构建工具后成功生成 wheel，并在隔离源码搜索路径后从 wheel 内直接检索到知识文档。没有安装或升级项目依赖。
+Development validation for this stage (2026-10-23): full test output was `219 passed in 2.91s`. Both public samples, static_silicon and relaxation, completed in 4 decisions, retrieving electronic explanations and electronic/ionic explanations respectively; sample SHA-256 hashes matched before and after runs. The project virtual environment lacked setuptools, so the initial offline build failed. Using existing system build tools then produced a wheel, and knowledge documents were retrieved directly from that wheel after isolating the source search path. No project dependencies were installed or upgraded.

@@ -79,7 +79,7 @@ def build_scenarios(samples: dict[str, bytes]) -> list[Scenario]:
         ("relaxation", 3, 4, 86842, 99982, "marker_found", ["electronic.md", "ionic.md"]),
     ]:
         cases.append(Scenario(
-            name, "公开 OUTCAR：工具选择、迭代证据和参考来源", "pymatgen 原始公开日志",
+            name, "Public OUTCAR: tool selection, iteration evidence, and references", "Original public pymatgen log",
             {"OUTCAR": samples[name]}, _expected(
                 tools, iteration=[ionic, electronic, "reached_marker", header, [marker]],
                 marker_states=["marker_found", ionic_status], reference_documents=documents,
@@ -87,7 +87,7 @@ def build_scenarios(samples: dict[str, bytes]) -> list[Scenario]:
         ))
     # Cut immediately after Iteration 3(1); do not inherit an earlier EDIFF message.
     cases.append(Scenario(
-        "truncated_output", "输出截断：最后一步证据不足时保留 unknown", "relaxation 人工截断，非真实失败日志",
+        "truncated_output", "Truncated output: preserve unknown when evidence for the last step is insufficient", "Artificial truncation of relaxation output, not a real failure log",
         {"OUTCAR": samples["relaxation"][:81109]}, _expected(
             tools, iteration=[3, 1, "unknown", 81005, []],
             marker_states=["unknown", "unknown"], reference_documents=["outcar.md"],
@@ -95,23 +95,23 @@ def build_scenarios(samples: dict[str, bytes]) -> list[Scenario]:
     ))
     input_tools = ["inspect_directory", "inspect_incar"]
     cases.extend([
-        Scenario("incar_only", "只有 INCAR：选择输入检查工具", "人工构造输入",
+        Scenario("incar_only", "INCAR only: select the input inspection tool", "Synthetic input",
                  {"INCAR": b"IBRION=2; NSW=20\n"}, _expected(
                      input_tools, input_type="relaxation", input_error=None,
                      input_parameters={"IBRION": 2, "NSW": 20})),
-        Scenario("invalid_incar", "INCAR 解码失败：保留解析错误", "人工构造无效 UTF-8 字节",
+        Scenario("invalid_incar", "INCAR decoding failure: preserve the parsing error", "Synthetic invalid UTF-8 bytes",
                  {"INCAR": b"\xff\xfeinvalid\n"}, _expected(
                      input_tools, input_type="unknown", input_error="UnicodeDecodeError", input_parameters={})),
-        Scenario("empty_directory", "无可读输入输出：说明证据不足", "人工构造空目录",
+        Scenario("empty_directory", "No readable input or output: explain insufficient evidence", "Synthetic empty directory",
                  expected=_expected(["inspect_directory"])),
-        Scenario("missing_directory", "目录不存在：将工具错误交给后端", "人工构造缺失目录",
+        Scenario("missing_directory", "Missing directory: pass the tool error to the backend", "Synthetic missing directory",
                  expected=_expected(["inspect_directory"], tool_statuses=["error"],
                                     tool_errors=["execution_error"], tool_error_messages=["Tool raised FileNotFoundError"]),
                  missing_directory=True),
-        Scenario("step_limit", "一步预算：保留已获得的观察", "人工设置决策上限",
+        Scenario("step_limit", "One-step budget: preserve observations already obtained", "Manually configured decision limit",
                  {"OUTCAR": samples["static_silicon"]},
                  _expected(["inspect_directory"], status="max_steps"), max_steps=1),
-        Scenario("backend_failure", "后端第二次决策异常：保留第一次观察", "人工注入后端异常",
+        Scenario("backend_failure", "Backend error on the second decision: preserve the first observation", "Injected backend error",
                  expected=_expected(["inspect_directory"], status="backend_error", run_error_message="RuntimeError"),
                  fail_backend=True),
     ])
@@ -127,26 +127,26 @@ def _output_scenarios(samples: dict[str, bytes]) -> list[Scenario]:
     common = dict(oszicar_status="observed", oszicar_error=None, oszicar_has_issues=False,
                   oszicar_electronic=electronic, oszicar_summary=summary)
     cases = [Scenario(
-        "oszicar_only", "只有 OSZICAR：保留电子行、能量摘要及原文", "pymatgen 原始公开日志",
+        "oszicar_only", "OSZICAR only: retain electronic rows, energy summaries, and original text", "Original public pymatgen log",
         {"OSZICAR": oszicar}, _expected(["inspect_directory", "inspect_oszicar"], **common),
     )]
     paired = dict(common, iteration=[1, 13, "reached_marker", 42249, [54994]],
                   marker_states=["marker_found", "unknown"], reference_documents=["electronic.md"])
     # Tuples list the derived bytes and independent expected values, not parser output.
     variants = [
-        ("paired_outputs", "双日志编号一致", "pymatgen 原始公开配对日志", oszicar,
+        ("paired_outputs", "Step numbers match in both logs", "Original public paired pymatgen logs", oszicar,
          electronic, summary, False, "matched", "matched", "matched"),
-        ("ionic_mismatch", "离子编号不同：不跨离子步比较电子编号", "人工将 OSZICAR 摘要编号 1 改为 2",
+        ("ionic_mismatch", "Different ionic step numbers: do not compare electronic step numbers across ionic steps", "OSZICAR summary number manually changed from 1 to 2",
          oszicar[:1236] + oszicar[1236:].replace(b"   1 F=", b"   2 F=", 1),
          electronic, [2, *summary[1:]], False, "mismatched", "mismatched", "unknown"),
-        ("electronic_mismatch", "离子编号一致但电子编号不同", "人工将 OSZICAR 最后电子编号 13 改为 12",
+        ("electronic_mismatch", "Matching ionic step numbers but different electronic step numbers", "Last OSZICAR electronic step number manually changed from 13 to 12",
          oszicar[:1156] + oszicar[1156:].replace(b"RMM:  13", b"RMM:  12", 1),
          [electronic[0], 12, *electronic[2:]], summary, False, "mismatched", "matched", "mismatched"),
-        ("truncated_oszicar", "末行截断：丢弃旧候选，核对保持 unknown", "人工删除 OSZICAR 最后一字节换行",
+        ("truncated_oszicar", "Truncated last line: discard stale candidates and keep the comparison unknown", "Final newline byte manually removed from OSZICAR",
          oszicar[:-1], None, None, True, "unknown", "unknown", "unknown"),
-        ("missing_oszicar_summary", "保留电子行但没有摘要：不推算离子编号", "人工在 OSZICAR 摘要前截断",
+        ("missing_oszicar_summary", "Electronic row retained without a summary: do not infer the ionic step number", "OSZICAR manually truncated before the summary",
          oszicar[:1236], electronic, None, False, "unknown", "unknown", "unknown"),
-        ("unsupported_oszicar", "后续不支持的记录：不沿用前面的摘要", "人工在 OSZICAR 末尾追加 MD 形式记录，非真实失败日志",
+        ("unsupported_oszicar", "Unsupported subsequent record: do not reuse an earlier summary", "MD-style record manually appended to OSZICAR, not a real failure log",
          oszicar + b"   2 T= 300 E= -10.0 F= -10.1 E0= -10.1 EK= 0.1 SP= 0.0 SK= 0.0\n",
          None, None, True, "unknown", "unknown", "unknown"),
     ]

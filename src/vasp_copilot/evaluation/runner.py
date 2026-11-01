@@ -13,7 +13,7 @@ from ..tools.file_inspection import create_registry
 from .cases import OSZICAR_SAMPLE, REVISION, SAMPLES, Scenario, build_scenarios, load_samples
 from .observations import observe_comparison, observe_oszicar
 
-QUESTION = "请根据文件证据检查计算状态，并区分参考资料与本次计算的证据。"
+QUESTION = "Inspect the calculation status using file evidence, and distinguish reference material from evidence for this calculation."
 REFERENCE_SOURCES = {
     "electronic.md": "https://vasp.at/wiki/index.php/EDIFF",
     "ionic.md": "https://vasp.at/wiki/index.php/EDIFFG",
@@ -40,7 +40,7 @@ class CaseResult(Schema):
 class EvaluationReport(Schema):
     suite: str = "mock-agent-v2"
     backend: Literal["mock"] = "mock"
-    scope: str = "固定离线场景的流程与证据回归；不是 LLM 回答质量评分或 VASP 科学正确性验证。"
+    scope: str = "Workflow and evidence regression checks for fixed offline scenarios; this does not score LLM answer quality or validate VASP scientific correctness."
     fixture_revision: str = REVISION
     fixture_sha256: dict[str, str]
     status: Literal["passed", "failed"]

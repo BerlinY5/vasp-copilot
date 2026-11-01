@@ -10,7 +10,7 @@ from vasp_copilot.tools.file_inspection import create_registry
 
 
 def run_mock(directory, max_steps=6):
-    return AgentLoop(MockBackend(), create_registry(), max_steps).run("检查计算", str(directory))
+    return AgentLoop(MockBackend(), create_registry(), max_steps).run("Inspect calculation", str(directory))
 
 
 def test_first_observation_changes_next_tool(tmp_path):
@@ -32,7 +32,7 @@ def test_empty_directory_finishes_after_one_tool(tmp_path):
     result = run_mock(tmp_path)
     assert result.status == "completed" and len(result.state.history) == 1
     assert result.decision_steps == 2
-    assert "证据不足" in result.answer
+    assert "Insufficient evidence" in result.answer
 
 
 def test_missing_directory_error_is_observed_and_explained(tmp_path):
@@ -50,7 +50,7 @@ def test_tool_success_with_file_error_not_misreported(tmp_path):
                 (tmp_path / "OUTCAR").unlink()
             return decision
     (tmp_path / "OUTCAR").write_text("example", encoding="ascii")
-    result = AgentLoop(RemovingBackend(), create_registry()).run("检查", str(tmp_path))
+    result = AgentLoop(RemovingBackend(), create_registry()).run("Inspect", str(tmp_path))
     assert "FileNotFoundError" in result.answer
     assert result.state.history[-1].observation.status == "success"
     assert result.state.history[-1].observation.data["error"] is not None
@@ -60,7 +60,7 @@ def test_max_steps_bounds_calls_and_preserves_history(tmp_path):
     class RepeatingBackend:
         def decide(self, state, tools):
             return ToolCall(tool_name="inspect_directory", arguments={"directory": state.directory})
-    result = AgentLoop(RepeatingBackend(), create_registry(), 2).run("检查", str(tmp_path))
+    result = AgentLoop(RepeatingBackend(), create_registry(), 2).run("Inspect", str(tmp_path))
     assert result.status == "max_steps" and result.answer is None
     assert [event.step for event in result.state.history] == [1, 2]
     assert result.decision_steps == 2
@@ -85,7 +85,7 @@ def test_invalid_backend_decision_stops_without_tool_execution(tmp_path, raw):
     class InvalidBackend:
         def decide(self, state, tools):
             return raw
-    result = AgentLoop(InvalidBackend(), create_registry()).run("检查", str(tmp_path))
+    result = AgentLoop(InvalidBackend(), create_registry()).run("Inspect", str(tmp_path))
     assert result.status == "backend_error"
     assert result.state.history == []
 
@@ -96,7 +96,7 @@ def test_backend_failure_keeps_prior_history(tmp_path):
             if state.history:
                 raise RuntimeError("private backend detail")
             return super().decide(state, tools)
-    result = AgentLoop(FailingBackend(), create_registry()).run("检查", str(tmp_path))
+    result = AgentLoop(FailingBackend(), create_registry()).run("Inspect", str(tmp_path))
     assert result.status == "backend_error" and len(result.state.history) == 1
     assert "private backend detail" not in result.model_dump_json()
 
@@ -109,8 +109,8 @@ def test_backend_can_correct_invalid_tool_arguments(tmp_path):
             if state.history[-1].observation.status == "error":
                 assert state.history[-1].observation.error.kind == "invalid_arguments"
                 return ToolCall(tool_name="inspect_directory", arguments={"directory": state.directory})
-            return Finish(answer="已修正参数并获得文件检查结果")
-    result = AgentLoop(CorrectingBackend(), create_registry()).run("检查", str(tmp_path))
+            return Finish(answer="Corrected arguments and obtained file inspection results")
+    result = AgentLoop(CorrectingBackend(), create_registry()).run("Inspect", str(tmp_path))
     assert result.status == "completed"
     assert [e.observation.status for e in result.state.history] == ["error", "success"]
 
@@ -121,8 +121,8 @@ def test_unknown_tool_observation_can_reach_backend(tmp_path):
             if not state.history:
                 return ToolCall(tool_name="not_registered", arguments={})
             assert state.history[-1].observation.error.kind == "unknown_tool"
-            return Finish(answer="工具不存在，停止")
-    result = AgentLoop(UnknownToolBackend(), create_registry()).run("检查", str(tmp_path))
+            return Finish(answer="Tool does not exist; stop")
+    result = AgentLoop(UnknownToolBackend(), create_registry()).run("Inspect", str(tmp_path))
     assert result.status == "completed" and len(result.state.history) == 1
 
 
@@ -146,10 +146,10 @@ def test_reusing_loop_does_not_accumulate_history(tmp_path):
 
 
 def test_cli_agent_serializes_history(tmp_path, capsys):
-    assert main([str(tmp_path), "--agent", "--question", "检查输出"]) == 0
+    assert main([str(tmp_path), "--agent", "--question", "Inspect output"]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "completed"
-    assert report["state"]["question"] == "检查输出"
+    assert report["state"]["question"] == "Inspect output"
     assert report["state"]["history"][0]["call"]["tool_name"] == "inspect_directory"
 
 
@@ -163,4 +163,4 @@ def test_keyboard_interrupt_propagates(tmp_path):
         def decide(self, state, tools):
             raise KeyboardInterrupt()
     with pytest.raises(KeyboardInterrupt):
-        AgentLoop(InterruptingBackend(), create_registry()).run("检查", str(tmp_path))
+        AgentLoop(InterruptingBackend(), create_registry()).run("Inspect", str(tmp_path))

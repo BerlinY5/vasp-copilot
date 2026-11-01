@@ -27,12 +27,12 @@ def call(name, arguments, call_id):
 
 def batch(*calls):
     return {"choices": [{"finish_reason": "tool_calls", "message": {
-        "role": "assistant", "content": "读取文件并检索参考", "tool_calls": list(calls),
+        "role": "assistant", "content": "Read files and retrieve references", "tool_calls": list(calls),
     }}]}
 
 
 def final():
-    return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "保留 unknown"}}]}
+    return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Preserve unknown"}}]}
 
 
 def test_native_batch_scan_and_search_roundtrip_cli_save_report(tmp_path, monkeypatch, capsys):
@@ -51,7 +51,7 @@ def test_native_batch_scan_and_search_roundtrip_cli_save_report(tmp_path, monkey
         assert len(payloads) == 2
         assistant, scan, search = payload["messages"][-3:]
         assert assistant["role"] == "assistant" and assistant["tool_calls"] == calls
-        assert assistant["content"] == "读取文件并检索参考"
+        assert assistant["content"] == "Read files and retrieve references"
         assert scan["role"] == search["role"] == "tool"
         assert [scan["tool_call_id"], search["tool_call_id"]] == ["scan_1", "search_1"]
         assert json.loads(scan["content"])["data"]["output_comparison"]["status"] == "unknown"
@@ -71,7 +71,7 @@ def test_native_batch_scan_and_search_roundtrip_cli_save_report(tmp_path, monkey
     assert not record.run.state.completion_feedback
     assert _history_messages(record.run.state) == payloads[1]["messages"][-3:]
     report = render_markdown(record)
-    assert "同轮调用 1/2" in report and "同轮调用 2/2" in report
+    assert "same-turn call 1/2" in report and "same-turn call 2/2" in report
     assert "test-key" not in report
 
 
@@ -96,7 +96,7 @@ def test_entire_batch_is_parsed_before_any_execution(tmp_path, monkeypatch, prob
     executions = []
     monkeypatch.setattr(registry, "execute", lambda *args: executions.append(args))
     backend = DeepSeekBackend(DeepSeekConfig("test-key"), lambda *args: batch(*calls))
-    run = AgentLoop(backend, registry).run("检查", str(tmp_path))
+    run = AgentLoop(backend, registry).run("Inspect", str(tmp_path))
     assert run.status == "backend_error" and run.error.message == expected
     assert not executions and not run.state.history
     assert "private" not in run.model_dump_json()
@@ -122,7 +122,7 @@ def test_batch_errors_are_returned_and_required_search_can_be_repaired(tmp_path)
         return final()
 
     run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path), 4,
-                    required_tools=("search_knowledge",)).run("检查", str(tmp_path))
+                    required_tools=("search_knowledge",)).run("Inspect", str(tmp_path))
     assert run.status == "completed" and run.decision_steps == 4
     assert [event.step for event in run.state.history] == [1, 1, 3]
     assert run.state.completion_feedback[0].step == 2
@@ -136,7 +136,7 @@ def test_batch_does_not_bypass_registry_checks(tmp_path, name, arguments, error)
     arguments = {"directory": str(tmp_path.parent)} if arguments else arguments
     replies = iter([batch(call(name, arguments, "bad"), call("search_knowledge", {"query": "OUTCAR"}, "good")), final()])
     backend = DeepSeekBackend(DeepSeekConfig("test-key"), lambda *args: next(replies))
-    run = AgentLoop(backend, create_registry(tmp_path), 2).run("检查", str(tmp_path))
+    run = AgentLoop(backend, create_registry(tmp_path), 2).run("Inspect", str(tmp_path))
     assert run.status == "completed"
     assert run.state.history[0].observation.error.kind == error
     assert run.state.history[1].observation.status == "success"
@@ -145,7 +145,7 @@ def test_batch_does_not_bypass_registry_checks(tmp_path, name, arguments, error)
 def batch_state(directory):
     calls = [call("search_knowledge", {"query": "OUTCAR"}, str(i)) for i in range(2)]
     backend = DeepSeekBackend(DeepSeekConfig("test-key"), lambda *args: batch(*calls))
-    return AgentLoop(backend, create_registry(directory), 1).run("检查", str(directory)).state
+    return AgentLoop(backend, create_registry(directory), 1).run("Inspect", str(directory)).state
 
 
 @pytest.mark.parametrize("problem", ["missing_result", "reversed", "size", "content", "duplicate_id", "split_step"])
@@ -178,7 +178,7 @@ def test_last_budgeted_decision_preserves_whole_eight_call_batch(tmp_path):
         requests.append(payload)
         return batch(*[call("search_knowledge", {"query": "OUTCAR"}, str(i)) for i in range(8)])
 
-    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path), 1).run("检索", str(tmp_path))
+    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path), 1).run("Search", str(tmp_path))
     assert run.status == "max_steps" and run.answer is None and len(requests) == 1
     assert len(run.state.history) == 8 and {event.step for event in run.state.history} == {1}
     assert [event.batch_index for event in run.state.history] == list(range(1, 9))
@@ -189,7 +189,7 @@ def test_old_single_call_history_defaults_to_single_batch(tmp_path):
     state = batch_state(tmp_path)
     old_event = state.history[0].model_dump()
     del old_event["batch_index"], old_event["batch_size"]
-    loaded = AgentState(question="旧记录", directory=str(tmp_path), history=[ToolEvent.model_validate(old_event)])
+    loaded = AgentState(question="Legacy record", directory=str(tmp_path), history=[ToolEvent.model_validate(old_event)])
     assert loaded.history[0].batch_index == loaded.history[0].batch_size == 1
     assert len(_history_messages(loaded)) == 2
 
@@ -208,7 +208,7 @@ def test_single_then_batch_replay_keeps_original_assistant_groups(tmp_path):
         assert [[call["id"] for call in message["tool_calls"]] for message in assistants] == [["inventory"], ["outcar", "ediff"]]
         return final()
 
-    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path), 3).run("检查", str(tmp_path))
+    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path), 3).run("Inspect", str(tmp_path))
     assert run.status == "completed" and [event.step for event in run.state.history] == [1, 2, 2]
 
 
@@ -221,5 +221,5 @@ def test_generic_batch_decision_is_validated_before_execution(tmp_path, calls):
         def decide(self, state, tools):
             return {"type": "tools", "calls": copy.deepcopy(calls)}
 
-    run = AgentLoop(InvalidBackend(), create_registry(tmp_path)).run("检查", str(tmp_path))
+    run = AgentLoop(InvalidBackend(), create_registry(tmp_path)).run("Inspect", str(tmp_path))
     assert run.status == "backend_error" and run.state.history == []

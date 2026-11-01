@@ -23,13 +23,18 @@ def test_module_entry_point_without_key(tmp_path):
     assert json.loads(result.stdout)["suite"] == "mock-agent-v2"
 
 
-def test_json_output_is_utf8_and_refuses_overwrite(tmp_path, capsys):
-    output = tmp_path / "报告" / "result.json"
+def test_json_output_is_utf8_and_refuses_overwrite(tmp_path, monkeypatch, capsys):
+    report = evaluate(FIXTURES)
+    unicode_note = "\u56fa\u5b9a\u79bb\u7ebf\u573a\u666f"
+    report.scope += " " + unicode_note
+    monkeypatch.setattr(cli, "evaluate", lambda _: report)
+    output = tmp_path / "\u62a5\u544a" / "result.json"
     args = ["--fixtures", str(FIXTURES), "--output", str(output)]
     assert cli.main(args) == 0
     saved = output.read_bytes()
     assert json.loads(saved.decode("utf-8")) == json.loads(capsys.readouterr().out)
-    assert "固定离线场景" in saved.decode("utf-8")
+    assert "fixed offline scenarios" in saved.decode("utf-8")
+    assert unicode_note.encode("utf-8") in saved
     assert cli.main(args) == 2
     error = json.loads(capsys.readouterr().err)["error"]
     assert error == {"kind": "evaluation_output_error", "message": "FileExistsError"}

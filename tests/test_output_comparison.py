@@ -41,7 +41,7 @@ def test_electronic_mismatch_only_with_same_observed_ionic_number(tmp_path):
     assert report.status == "mismatched"
     assert [item.status for item in report.checks] == ["matched", "mismatched"]
     assert (report.checks[1].outcar_value, report.checks[1].oszicar_value) == (13, 12)
-    assert "原因未确定" in report.checks[1].reason
+    assert "the cause is undetermined" in report.checks[1].reason
 
 
 def test_different_ionic_numbers_do_not_claim_electronic_alignment(tmp_path):
@@ -50,7 +50,7 @@ def test_different_ionic_numbers_do_not_claim_electronic_alignment(tmp_path):
     assert report.status == "mismatched"
     assert [item.status for item in report.checks] == ["mismatched", "unknown"]
     assert (report.checks[1].outcar_value, report.checks[1].oszicar_value) == (13, 13)
-    assert "不比较" in report.checks[1].reason
+    assert "are not compared" in report.checks[1].reason
 
 
 @pytest.mark.parametrize("missing", ["OUTCAR", "OSZICAR"])
@@ -59,7 +59,7 @@ def test_missing_file_blocks_comparison(tmp_path, missing):
     (tmp_path / missing).unlink()
     report = compare_output_steps(diagnose_outcar(tmp_path / "OUTCAR"), inspect_oszicar(tmp_path / "OSZICAR"))
     assert report.status == "unknown"
-    assert all(item.status == "unknown" and f"{missing} 读取失败" in item.reason for item in report.checks)
+    assert all(item.status == "unknown" and f"{missing} read failed" in item.reason for item in report.checks)
 
 
 @pytest.mark.parametrize("outcar, oszicar", [
@@ -103,7 +103,7 @@ def test_reversed_record_order_cannot_align_electronic_number(tmp_path):
     oszicar.last_electronic_step.evidence.byte_offset = oszicar.last_energy_summary.evidence.byte_offset
     report = compare_output_steps(outcar, oszicar)
     assert report.status == "unknown" and report.checks[1].status == "unknown"
-    assert "顺序" in report.checks[1].reason
+    assert "order" in report.checks[1].reason
 
 
 def test_limited_oszicar_window_with_warning_remains_unknown(tmp_path):

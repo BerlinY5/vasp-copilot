@@ -13,7 +13,7 @@ def header(ionic=1, electronic=1):
 
 @pytest.mark.parametrize("marker,status", [(REACHED, "reached_marker"), (NOT_REACHED, "not_reached_marker")])
 def test_messages_and_byte_evidence(marker, status):
-    prefix = "title 测试\n".encode()
+    prefix = "title \u6d4b\u8bd5\n".encode()
     data = prefix + header(2, 8) + b"---" + marker + b"---\r\n"
     result = observe_last_iteration(data, 0)
     assert (result.ionic_step, result.electronic_step, result.status) == (2, 8, status)

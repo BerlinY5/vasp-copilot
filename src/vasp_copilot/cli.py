@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--progress", action="store_true",
                         help="Show agent stage progress on stderr; stdout remains a single JSON result")
     parser.add_argument("--backend", choices=["mock", "deepseek"], default="mock", help="Agent decision backend")
-    parser.add_argument("--question", default="请检查这个计算目录", help="Question recorded in the agent state")
+    parser.add_argument("--question", default="Please inspect this calculation directory", help="Question recorded in the agent state")
     parser.add_argument("--max-steps", type=int, default=6,
                         help="Maximum decisions including final answer; a batch counts once, at most 8 calls per decision (1-100)")
     parser.add_argument("--require-knowledge", action="store_true",

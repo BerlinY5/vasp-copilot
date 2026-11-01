@@ -52,7 +52,7 @@ def test_native_premature_final_is_repaired_and_saved_via_cli(tmp_path, monkeypa
             return native_tool("scan_directory", {"directory": str(directory)}, "scan_1")
         if len(payloads) == 2:
             assert '"knowledge_search_calls": 0' in payload["messages"][0]["content"]
-            return native_final("检索资料表明……这个提前答案不能被接受。")
+            return native_final("References suggest... This premature answer must not be accepted.")
         if len(payloads) == 3:
             instruction = payload["messages"][0]["content"]
             assert "missing_required_tools" in instruction and '"step": 2' in instruction
@@ -66,7 +66,7 @@ def test_native_premature_final_is_repaired_and_saved_via_cli(tmp_path, monkeypa
         assert '"completion_feedback": null' in payload["messages"][0]["content"]
         assert payload["messages"][-1]["tool_call_id"] == "search_3"
         assert json.loads(payload["messages"][-1]["content"])["data"]["hits"]
-        return native_final("已检索本地 EDIFF 说明；本次计算结论仍为 unknown。")
+        return native_final("Local EDIFF references retrieved; this calculation remains unknown.")
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(cli, "DeepSeekBackend", lambda config: DeepSeekBackend(config, transport))
@@ -82,23 +82,23 @@ def test_native_premature_final_is_repaired_and_saved_via_cli(tmp_path, monkeypa
     record = RunRepository(database).get(result["history_record"]["run_id"])
     assert record.run.state.completion_feedback[0].missing_tools == ["search_knowledge"]
     report = render_markdown(record)
-    assert "提前结束的纠正记录" in report and "结束前的工具要求" in report
-    assert "这个提前答案不能被接受" not in report
+    assert "Final-answer correction history" in report and "Required tools before completion" in report
+    assert "This premature answer must not be accepted" not in report
     assert "test-key" not in report + json.dumps(payloads)
 
 
 @pytest.mark.parametrize("budget", [1, 3])
 def test_repeated_finals_cannot_bypass_requirement_or_budget(tmp_path, budget):
-    backend = Decisions(*[Finish(answer="未经检索的回答")] * budget)
-    run = AgentLoop(backend, create_registry(), budget, required_tools=("search_knowledge",)).run("检索", str(tmp_path))
+    backend = Decisions(*[Finish(answer="Answer without retrieval")] * budget)
+    run = AgentLoop(backend, create_registry(), budget, required_tools=("search_knowledge",)).run("Retrieve", str(tmp_path))
     assert run.status == "max_steps" and run.answer is None
     assert run.decision_steps == budget and not run.state.history
     assert [item.step for item in run.state.completion_feedback] == list(range(1, budget + 1))
 
 
 def test_failed_tool_call_does_not_satisfy_requirement(tmp_path):
-    backend = Decisions(ToolCall(tool_name="search_knowledge", arguments={}), Finish(answer="检索完成"))
-    run = AgentLoop(backend, create_registry(), 2, required_tools=("search_knowledge",)).run("检索", str(tmp_path))
+    backend = Decisions(ToolCall(tool_name="search_knowledge", arguments={}), Finish(answer="Retrieval complete"))
+    run = AgentLoop(backend, create_registry(), 2, required_tools=("search_knowledge",)).run("Retrieve", str(tmp_path))
     assert run.status == "max_steps" and run.answer is None
     assert run.state.history[0].observation.error.kind == "invalid_arguments"
     assert run.state.completion_feedback[0].missing_tools == ["search_knowledge"]
@@ -113,10 +113,10 @@ def test_zero_hits_can_finish_and_does_not_invent_sources(tmp_path):
             return native_tool("search_knowledge", {"query": "zzzz-no-matching-reference"}, "empty_1")
         assert '"successful_knowledge_searches": 1' in payload["messages"][0]["content"]
         assert '"returned_reference_hits": 0' in payload["messages"][0]["content"]
-        return native_final("本地检索没有命中，参考解释不足。")
+        return native_final("No local references matched; reference coverage is insufficient.")
 
     run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(), 2,
-                    required_tools=("search_knowledge",)).run("检索", str(tmp_path))
+                    required_tools=("search_knowledge",)).run("Retrieve", str(tmp_path))
     assert run.status == "completed" and run.state.history[0].observation.data["hits"] == []
     assert run.state.completion_feedback == []
 
@@ -125,14 +125,14 @@ def test_backend_cannot_erase_requirement_by_mutating_its_state_copy(tmp_path):
     class MutatingBackend:
         def decide(self, state, tools):
             state.required_tools.clear()
-            return Finish(answer="试图绕过要求")
+            return Finish(answer="Attempt to bypass the requirement")
 
-    run = AgentLoop(MutatingBackend(), create_registry(), 1, required_tools=("search_knowledge",)).run("检索", str(tmp_path))
+    run = AgentLoop(MutatingBackend(), create_registry(), 1, required_tools=("search_knowledge",)).run("Retrieve", str(tmp_path))
     assert run.status == "max_steps" and run.state.required_tools == ["search_knowledge"]
 
 
 def test_opt_in_does_not_change_default_final_behavior(tmp_path):
-    run = AgentLoop(Decisions(Finish(answer="直接回答")), create_registry()).run("解释", str(tmp_path))
+    run = AgentLoop(Decisions(Finish(answer="Direct answer")), create_registry()).run("Explain", str(tmp_path))
     assert run.status == "completed" and run.state.required_tools == []
 
 
@@ -151,8 +151,8 @@ def test_requirement_cli_rejects_non_deepseek_agent_usage(arguments, capsys):
 
 
 def test_old_snapshot_defaults_to_no_requirement_or_feedback():
-    run = AgentRun.model_validate({"status": "completed", "decision_steps": 1, "answer": "旧回答", "error": None,
-                                   "state": {"question": "检查", "directory": ".", "history": []}})
+    run = AgentRun.model_validate({"status": "completed", "decision_steps": 1, "answer": "Legacy answer", "error": None,
+                                   "state": {"question": "Inspect", "directory": ".", "history": []}})
     assert run.state.required_tools == [] and run.state.completion_feedback == []
 
 
@@ -161,8 +161,8 @@ def test_backend_error_after_rejection_preserves_feedback(tmp_path):
         def decide(self, state, tools):
             if state.completion_feedback:
                 raise RuntimeError("private detail")
-            return Finish(answer="提前结束")
+            return Finish(answer="Premature final answer")
 
-    run = AgentLoop(BrokenBackend(), create_registry(), 3, required_tools=("search_knowledge",)).run("检索", str(tmp_path))
+    run = AgentLoop(BrokenBackend(), create_registry(), 3, required_tools=("search_knowledge",)).run("Retrieve", str(tmp_path))
     assert run.status == "backend_error" and run.decision_steps == 2
     assert len(run.state.completion_feedback) == 1 and "private detail" not in run.model_dump_json()

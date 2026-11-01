@@ -33,7 +33,7 @@ def inspect(tmp_path, content):
 
 
 def test_explicit_last_loop_report_produces_warning_with_impact_checks_and_exact_evidence(tmp_path):
-    prefix = "样例前缀\r\n".encode("utf-8")
+    prefix = "\u6837\u4f8b\u524d\u7f00\r\n".encode("utf-8")
     result = inspect(tmp_path, prefix + FAILURE)
     assert result.status == "reported_not_reached" and result.severity == "warning"
     assert (result.ionic_step, result.electronic_step) == (1, 60)
@@ -124,7 +124,7 @@ def test_native_agent_gets_local_warning_and_references_then_saves_and_renders(t
         hits = json.loads(payload["messages"][-1]["content"])["data"]["hits"]
         assert {hit["document"] for hit in hits} == {"electronic.md", "nelm.md"}
         return {"choices": [{"finish_reason": "stop", "message": {
-            "role": "assistant", "content": "最后采样循环报告未达 EDIFF；应先核对模式与设置。整体状态未知。",
+            "role": "assistant", "content": "The last sampled loop reports not reaching EDIFF; first check the mode and settings. Overall status is unknown.",
         }}]}
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
@@ -135,12 +135,12 @@ def test_native_agent_gets_local_warning_and_references_then_saves_and_renders(t
     output = json.loads(capsys.readouterr().out)
     record = RunRepository(database).get(output["history_record"]["run_id"])
     report = render_markdown(record)
-    assert "reported\\_not\\_reached" in report and "影响与风险" in report
-    assert "建议人工核查" in report and record.run.state.history[0].observation.data["electronic_convergence"] == "unknown"
+    assert "reported\\_not\\_reached" in report and "Impact and risks" in report
+    assert "Suggested manual checks" in report and record.run.state.history[0].observation.data["electronic_convergence"] == "unknown"
     old = copy.deepcopy(record)
     del old.run.state.history[0].observation.data["electronic_step_diagnosis"]
     snapshot = old.model_dump()
     legacy_report = render_markdown(old)
-    assert "此记录未生成或未保存电子循环局部诊断" in legacy_report
-    assert "**最后采样电子循环的局部诊断**" not in legacy_report
+    assert "A local electronic-loop diagnosis was not generated or saved in this record" in legacy_report
+    assert "**Local diagnosis of the last sampled electronic loop**" not in legacy_report
     assert old.model_dump() == snapshot  # No rule backfill into an older snapshot.

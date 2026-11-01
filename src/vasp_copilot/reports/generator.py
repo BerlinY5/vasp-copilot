@@ -43,125 +43,125 @@ def _json(value: Any) -> str:
 
 
 def _evidence(item: dict[str, Any]) -> str:
-    return f"文件：{_cell(item['file'])}；零起始字节偏移：{item['byte_offset']}。\n\n{_fenced(item['text'])}"
+    return f"File: {_cell(item['file'])}; zero-based byte offset: {item['byte_offset']}.\n\n{_fenced(item['text'])}"
 
 
 def _inventory(data: dict[str, Any]) -> list[str]:
-    return ["**文件清单**", _table(["文件", "检查状态", "存在", "可读取", "错误"], [
+    return ["**File inventory**", _table(["File", "Inspection status", "Exists", "Readable", "Error"], [
         [item["name"], item["status"], item["exists"], item["readable"], item["error"] or "—"]
         for item in data["files"]
     ])]
 
 
 def _diagnosis(data: dict[str, Any]) -> list[str]:
-    parts = ["**OUTCAR 采样与状态**", _table(["字段", "工具记录值"], [
+    parts = ["**OUTCAR sampling and status**", _table(["Field", "Value recorded by the tool"], [
         [key, data[key]] for key in ("read_start", "bytes_read", "snapshot_size", "normal_termination", "electronic_convergence", "ionic_convergence")
-    ]), "字节读取范围不等于完整内容解析；标记和迭代编号不等于整体收敛结论。"]
+    ]), "A byte-read range does not mean all content was parsed; markers and iteration numbers do not establish overall convergence."]
     if data["error"]:
-        parts.extend(["文件解析错误：", _json(data["error"])])
-    parts.append(_table(["规则", "观察状态", "证据数量"], [
+        parts.extend(["File parsing error:", _json(data["error"])])
+    parts.append(_table(["Rule", "Observation status", "Evidence count"], [
         [finding["rule_id"], finding["status"], len(finding["evidence"])] for finding in data["findings"]
     ]))
     for finding in data["findings"]:
-        parts.append(f"规则说明：{_cell(finding['rule_id'])}")
+        parts.append(f"Rule explanation: {_cell(finding['rule_id'])}")
         parts.append(_fenced(finding["explanation"]))
         parts.extend(_evidence(item) for item in finding["evidence"])
         if finding["sources"]:
-            parts.extend(["规则参考来源（不是本次计算证据）：", _fenced("\n".join(finding["sources"]))])
+            parts.extend(["Rule references (not evidence for this calculation):", _fenced("\n".join(finding["sources"]))])
     iteration = data["last_iteration"]
-    parts.extend(["**最后可识别迭代**", _table(["离子步编号", "电子步编号", "消息状态"], [
+    parts.extend(["**Last identifiable iteration**", _table(["Ionic step number", "Electronic step number", "Message status"], [
         [iteration["ionic_step"], iteration["electronic_step"], iteration["status"]]
     ])])
     if iteration["header"]:
         parts.append(_evidence(iteration["header"]))
     parts.extend(_evidence(item) for item in iteration["markers"])
     if iteration["issues"]:
-        parts.extend(["工具记录的不确定性：", _json(iteration["issues"])])
-    parts.extend(["迭代观察范围：", _fenced(iteration["explanation"])])
+        parts.extend(["Uncertainties recorded by the tool:", _json(iteration["issues"])])
+    parts.extend(["Iteration observation scope:", _fenced(iteration["explanation"])])
     if iteration["sources"]:
-        parts.extend(["迭代解析参考来源：", _fenced("\n".join(iteration["sources"]))])
+        parts.extend(["Iteration parsing references:", _fenced("\n".join(iteration["sources"]))])
     settings = data["electronic_settings"]
     if settings is None:
-        parts.append("此记录未生成或未保存电子自洽设置观察，不从当前文件补写。")
+        parts.append("Electronic self-consistency settings were not generated or saved in this record; they are not filled in from current files.")
     else:
-        parts.extend(["**OUTCAR 前缀电子自洽设置**", _table(["前缀读取字节", "文件快照大小", "窗口受限", "循环关联"], [[
+        parts.extend(["**OUTCAR prefix electronic self-consistency settings**", _table(["Prefix bytes read", "File snapshot size", "Window limited", "Loop association"], [[
             settings["bytes_read"], settings["snapshot_size"], settings["window_limited"], settings["iteration_association"],
-        ]]), _table(["参数", "采样状态", "值", "出现次数"], [
+        ]]), _table(["Parameter", "Sampling status", "Value", "Occurrences"], [
             [p["name"], p["status"], p["value"], p["occurrences"]] for p in settings["parameters"]
         ]), _fenced(settings["explanation"])])
         for parameter in settings["parameters"]:
-            parts.append(f"参数 {_cell(parameter['name'])}：")
+            parts.append(f"Parameter {_cell(parameter['name'])}:")
             parts.extend(_evidence(e) for e in parameter["evidence"])
             if parameter["issues"]:
                 parts.append(_json(parameter["issues"]))
         if settings["issues"]:
-            parts.extend(["设置上下文问题：", _json(settings["issues"])])
+            parts.extend(["Settings context issues:", _json(settings["issues"])])
     local = data["electronic_step_diagnosis"]
     if local is None:
-        parts.append("此记录未生成或未保存电子循环局部诊断，不使用当前规则追补历史。")
+        parts.append("A local electronic-loop diagnosis was not generated or saved in this record; current rules are not applied retroactively.")
     else:
-        parts.extend(["**最后采样电子循环的局部诊断**", _table(["规则", "局部状态", "级别", "范围"], [[
+        parts.extend(["**Local diagnosis of the last sampled electronic loop**", _table(["Rule", "Local status", "Severity", "Scope"], [[
             local["rule_id"], local["status"], local["severity"], local["scope"],
         ]]), _fenced(local["summary"])])
         if local["impact"]:
-            parts.extend(["影响与风险：", _fenced(local["impact"])])
+            parts.extend(["Impact and risks:", _fenced(local["impact"])])
         parts.extend(_evidence(item) for item in local["evidence"])
         if local["recommendations"]:
-            parts.extend(["建议人工核查（不会自动修改参数）：", _fenced("\n".join(local["recommendations"]))])
+            parts.extend(["Suggested manual checks (no automatic parameter changes):", _fenced("\n".join(local["recommendations"]))])
         if local["settings_considerations"]:
-            parts.append("结合前缀设置的条件性说明（不证明属于该循环）：")
+            parts.append("Conditional notes on prefix settings (their association with this loop is unverified):")
             for consideration in local["settings_considerations"]:
                 parts.append(_fenced(consideration["summary"]))
                 parts.extend(_evidence(e) for e in consideration["evidence"])
-        parts.extend(["局限：", _fenced("\n".join(local["limitations"])),
-                      "规则依据（不替代本次文件证据）：", _fenced("\n".join(local["sources"]))])
+        parts.extend(["Limitations:", _fenced("\n".join(local["limitations"])),
+                      "Rule sources (do not replace file evidence for this calculation):", _fenced("\n".join(local["sources"]))])
     return parts
 
 
 def _input_context(data: dict[str, Any]) -> list[str]:
-    parts = [f"**INCAR 输入意图：{_cell(data['calculation_type'])}**", _table(["参数", "值", "一基行号", "原始行"], [
+    parts = [f"**INCAR input intent: {_cell(data['calculation_type'])}**", _table(["Parameter", "Value", "One-based line number", "Original line"], [
         [item["name"], item["value"], item["line_number"], item["text"]] for item in data["parameters"]
     ])]
     if data["issues"] or data["error"]:
-        parts.extend(["输入解析问题：", _json({"issues": data["issues"], "error": data["error"]})])
-    parts.extend([_fenced(data["explanation"]), "输入参数参考来源：", _fenced("\n".join(data["sources"]))])
+        parts.extend(["Input parsing issues:", _json({"issues": data["issues"], "error": data["error"]})])
+    parts.extend([_fenced(data["explanation"]), "Input parameter references:", _fenced("\n".join(data["sources"]))])
     return parts
 
 
 def _oszicar(data: dict[str, Any]) -> list[str]:
-    parts = ["**OSZICAR 电子迭代与能量摘要**", _table(["字段", "工具记录值"], [
+    parts = ["**OSZICAR electronic iterations and energy summaries**", _table(["Field", "Value recorded by the tool"], [
         [key, data[key]] for key in ("status", "read_start", "bytes_read", "snapshot_size",
                                     "electronic_convergence", "ionic_convergence", "normal_termination")
-    ]), "observed 仅表示识别到支持的日志行。电子行 dE 与摘要 d E 分开呈现，不由数值大小判定收敛。"]
+    ]), "observed means only that supported log rows were identified. Electronic-row dE and summary d E are shown separately; their magnitudes do not establish convergence."]
     electronic, summary = data["last_electronic_step"], data["last_energy_summary"]
     if electronic:
-        parts.extend(["最后保留的电子迭代行：", _table(
-            ["算法", "电子步编号", "E (eV)", "dE (eV)", "d eps (eV)", "ncg", "rms", "rms(c)"],
+        parts.extend(["Last retained electronic iteration row:", _table(
+            ["Algorithm", "Electronic step number", "E (eV)", "dE (eV)", "d eps (eV)", "ncg", "rms", "rms(c)"],
             [[electronic[key] for key in ("algorithm", "iteration", "energy_ev", "delta_energy_ev",
                                           "delta_band_energy_ev", "ncg", "rms", "rms_charge")]]),
             _evidence(electronic["evidence"])])
     if summary:
-        parts.extend(["最后保留的能量摘要行：", _table(
-            ["离子步编号", "F (eV)", "E0 (eV)", "摘要 d E (eV)"],
+        parts.extend(["Last retained energy summary row:", _table(
+            ["Ionic step number", "F (eV)", "E0 (eV)", "Summary d E (eV)"],
             [[summary[key] for key in ("ionic_step", "free_energy_ev", "energy_sigma0_ev", "reported_delta_energy_ev")]]),
             _evidence(summary["evidence"])])
     if not electronic and not summary:
-        parts.append("当前记录没有保留可解释的完整电子行或能量摘要；不能据此判定计算失败。")
+        parts.append("This record retains no interpretable complete electronic row or energy summary; this does not establish calculation failure.")
     if data["issues"] or data["error"]:
-        parts.extend(["OSZICAR 读取或格式问题：", _json({"issues": data["issues"], "error": data["error"]})])
-    parts.extend([_fenced(data["explanation"]), "格式参考（非本次计算证据）：", _fenced("\n".join(data["sources"]))])
+        parts.extend(["OSZICAR read or format issues:", _json({"issues": data["issues"], "error": data["error"]})])
+    parts.extend([_fenced(data["explanation"]), "Format references (not evidence for this calculation):", _fenced("\n".join(data["sources"]))])
     return parts
 
 
 def _output_comparison(data: dict[str, Any]) -> list[str]:
-    parts = [f"**输出日志采样编号核对：{_cell(data['status'])}**",
-             f"同次运行归属：{_cell(data['run_identity'])}。编号相同不证明收敛或同次运行，编号不同不证明失败或具体原因。",
-             _table(["检查项", "OUTCAR 编号", "OSZICAR 编号", "核对状态", "说明"], [
+    parts = [f"**Sampled output step comparison: {_cell(data['status'])}**",
+             f"Same-run identity: {_cell(data['run_identity'])}. Matching numbers do not establish convergence or a shared run; differing numbers do not establish failure or a specific cause.",
+             _table(["Check", "OUTCAR number", "OSZICAR number", "Comparison status", "Explanation"], [
                  [item["name"], item["outcar_value"], item["oszicar_value"], item["status"], item["reason"]]
                  for item in data["checks"]
              ])]
     for item in data["checks"]:
-        parts.append(f"{_cell(item['name'])} 的原文证据：")
+        parts.append(f"{_cell(item['name'])} original evidence:")
         for key in ("outcar_evidence", "oszicar_evidence"):
             if item[key]:
                 parts.append(_evidence(item[key]))
@@ -176,11 +176,11 @@ def _observation(tool_name: str, data: dict[str, Any]) -> list[str]:
               "search_knowledge": KnowledgeSearchResult}
     model = models.get(tool_name)
     if model is None:
-        return ["该工具没有专用报告视图，保留其原始观察：", _json(data)]
+        return ["This tool has no dedicated report view; its original observation is preserved:", _json(data)]
     try:
         data = model.model_validate(data).model_dump()
     except ValidationError:
-        return ["该工具记录不符合当前报告视图的数据格式，不据此生成摘要；原始观察如下：", _json(data)]
+        return ["This tool record does not match the data format of the current report view, so no summary is generated; the original observation follows:", _json(data)]
     if tool_name == "inspect_directory":
         return _inventory(data)
     if tool_name == "diagnose_outcar":
@@ -192,82 +192,83 @@ def _observation(tool_name: str, data: dict[str, Any]) -> list[str]:
     if tool_name == "compare_outputs":
         return _output_comparison(data)
     if tool_name == "scan_directory":
-        parts = [f"**工具记录的计算状态：{_cell(data['calculation_status'])}**"]
+        parts = [f"**Calculation status recorded by the tool: {_cell(data['calculation_status'])}**"]
         parts.extend(_inventory(data))
         parts.extend(_input_context(data["input_context"]))
         output = data["output_context"]
-        parts.extend(["**OUTCAR 前缀参数观察**", _table(["参数", "采样值", "字节偏移", "原始行"], [
+        parts.extend(["**OUTCAR prefix parameter observations**", _table(["Parameter", "Sampled value", "Byte offset", "Original line"], [
             [item["name"], item["value"], item["evidence"]["byte_offset"], item["evidence"]["text"]]
             for item in output["parameters"]
-        ]), "参数读取范围及问题：", _json({key: output[key] for key in ("read_start", "bytes_read", "window_limited", "issues", "error")}),
-            "**输入与输出采样值比较**", _json(data["context_comparison"])])
+        ]), "Parameter read scope and issues:", _json({key: output[key] for key in ("read_start", "bytes_read", "window_limited", "issues", "error")}),
+            "**Comparison of sampled input and output values**", _json(data["context_comparison"])])
         parts.extend(_diagnosis(data["diagnostics"]))
         if data["oszicar"] is not None:
             parts.extend(_oszicar(data["oszicar"]))
         else:
-            parts.append("此历史扫描记录未保存 OSZICAR 解析，不能据此推断当时文件缺失。")
+            parts.append("This historical scan record did not save OSZICAR parsing; this does not establish that the file was missing at the time.")
         if data["output_comparison"] is not None:
             parts.extend(_output_comparison(data["output_comparison"]))
         else:
-            parts.append("此历史扫描记录未保存输出日志编号核对，不使用当前文件或规则追补结论。")
+            parts.append("This historical scan record did not save the output step comparison; current files or rules are not used to reconstruct a verdict.")
         return parts
-    parts = ["**知识库参考资料（非计算文件证据）**", _fenced(data["notice"])]
+    parts = ["**Knowledge-base references (not calculation file evidence)**", _fenced(data["notice"])]
     if not data["hits"]:
-        parts.append("本次检索没有命中参考条目；这不表示计算异常。")
+        parts.append("This search returned no reference entries; this does not indicate a calculation anomaly.")
     for hit in data["hits"]:
         parts.extend([
-            f"条目：{_cell(hit['title'])}；本地文档：{_cell(hit['document'])}；一基行号：{hit['line_start']}–{hit['line_end']}。",
-            f"资料核对日期：{_cell(hit['reviewed_on'])}；类型：reference。",
+            f"Entry: {_cell(hit['title'])}; local document: {_cell(hit['document'])}; one-based lines: {hit['line_start']}–{hit['line_end']}.",
+            f"Reference review date: {_cell(hit['reviewed_on'])}; type: reference.",
         ])
         if hit["sections"]:
             for section in hit["sections"]:
-                label = {"official_summary": "官方资料摘要（项目转述）",
-                         "project_policy": "本项目使用限制", "unclassified": "归属未分类"}[section["kind"]]
-                parts.extend([f"**{label}**", "本地引用标识：", _fenced(section["citation"])])
+                label = {"official_summary": "Official documentation summary (project paraphrase)",
+                         "project_policy": "Project policy", "unclassified": "Unclassified attribution"}[section["kind"]]
+                parts.extend([f"**{label}**", "Local citation identifier:", _fenced(section["citation"])])
                 if section["source_url"] is not None:
-                    parts.extend(["此段对应的官网来源：", _fenced(section["source_url"])])
+                    parts.extend(["Official source for this section:", _fenced(section["source_url"])])
                 parts.append(_fenced(section["text"]))
         else:
-            parts.extend(["此历史记录没有按段归属，不从当前知识库补写；保留原始片段与来源字段。",
-                          "资料来源 URL（不代表支持整段项目限制）：", _fenced(hit["source"]),
-                          "保存时的参考片段：", _fenced(hit["excerpt"])])
+            parts.extend(["This historical record has no section-level attribution; current knowledge-base content is not added. The original excerpt and source fields are preserved.",
+                          "Reference source URL (does not imply support for all project limits):", _fenced(hit["source"]),
+                          "Reference excerpt as saved:", _fenced(hit["excerpt"])])
     return parts
 
 
 def render_markdown(record: StoredRun) -> str:
     """Pure formatting: uses only the saved record, with no filesystem or API reads."""
     summary, run = record.summary, record.run
-    parts = ["# VASP-Copilot 诊断报告", _table(["项目", "保存值"], [
-        ["记录编号", summary.id], ["保存时间（UTC）", summary.saved_at], ["后端", summary.backend],
-        ["Agent 运行状态", run.status], ["决策次数", run.decision_steps], ["工具调用次数", len(run.state.history)],
-    ]), "completed 仅表示 Agent 已生成回答，不表示 VASP 计算成功或收敛。报告基于保存时的记录，不反映源文件之后的变化。",
-        "## 用户问题", _fenced(run.state.question), "## 当时选择的目录", _fenced(run.state.directory),
-        "## 工具证据与参考资料"]
+    parts = ["# VASP-Copilot Diagnostic Report", _table(["Item", "Saved value"], [
+        ["Record ID", summary.id], ["Saved at (UTC)", summary.saved_at], ["Backend", summary.backend],
+        ["Agent run status", run.status], ["Decision steps", run.decision_steps], ["Tool calls", len(run.state.history)],
+    ]), "completed means only that the agent generated an answer; it does not establish VASP success or convergence. The report uses the saved record and does not reflect subsequent changes to source files.",
+        "## User question", _fenced(run.state.question), "## Directory selected at the time", _fenced(run.state.directory),
+        "## Tool evidence and references"]
     if not run.state.history:
-        parts.append("本次运行未记录工具观察；没有可由工具核对的文件证据。")
+        parts.append("This run recorded no tool observations; no file evidence is available for tool-based verification.")
     for event in run.state.history:
-        position = f"（同轮调用 {event.batch_index}/{event.batch_size}）" if event.batch_size > 1 else ""
-        parts.extend([f"### 步骤 {event.step}{position}：{_cell(event.call.tool_name)}",
-                      f"工具执行状态：{_cell(event.observation.status)}。success 仅表示工具产生了合法报告。",
-                      "调用参数：", _json(event.call.arguments)])
+        position = f" (same-turn call {event.batch_index}/{event.batch_size})" if event.batch_size > 1 else ""
+        parts.extend([f"### Step {event.step}{position}: {_cell(event.call.tool_name)}",
+                      f"Tool execution status: {_cell(event.observation.status)}. success means only that the tool produced a valid report.",
+                      "Call arguments:", _json(event.call.arguments)])
         if event.observation.status == "error":
-            parts.extend(["工具错误：", _json(event.observation.error.model_dump())])
+            parts.extend(["Tool error:", _json(event.observation.error.model_dump())])
         else:
             parts.extend(_observation(event.call.tool_name, event.observation.data))
     if run.state.required_tools:
-        parts.extend(["## 结束前的工具要求", _json(run.state.required_tools),
-                      "这些工具必须成功返回后才接受最终回答。检索允许零命中；通过要求不证明检索相关性或回答正确。"])
+        parts.extend(["## Required tools before completion", _json(run.state.required_tools),
+                      "These tools must return successfully before a final answer is accepted. A search may return no hits; satisfying the requirement does not establish retrieval relevance or answer correctness."])
     if run.state.completion_feedback:
-        parts.extend(["## 提前结束的纠正记录",
-                      "以下记录表示当时缺少必需工具调用；被拒绝的回答未作为最终答案保存。纠正计入决策步数。",
+        parts.extend(["## Final-answer correction history",
+                      "The following records indicate that required tool calls were missing at the time. Rejected answers were not saved as final answers. Corrections count toward decision steps.",
                       _json([item.model_dump() for item in run.state.completion_feedback])])
-    parts.extend(["## 后端回答原文（未自动事实核验）",
-                  _fenced(run.answer) if run.answer is not None else "本次运行未产生最终回答。"])
+    parts.extend(["## Backend answer",
+                  "The original backend answer is preserved verbatim and has not been automatically fact-checked.",
+                  _fenced(run.answer) if run.answer is not None else "This run did not produce a final answer."])
     if run.error:
-        parts.extend(["## 运行错误或终止原因", _json(run.error.model_dump())])
-    parts.extend(["## 判读边界",
-                  "本报告没有新增科学判定。保留工具的 unknown、解析错误及适用范围；缺失文件或未找到标记不自动等于失败。后端回答原样保留，可能包含超出证据的推断，应与上面的工具观察分别核对。",
-                  "## 完整保存快照", _json(record.model_dump())])
+        parts.extend(["## Run error or termination reason", _json(run.error.model_dump())])
+    parts.extend(["## Interpretation limits",
+                  "This report adds no scientific verdict. It preserves the tools' unknown states, parsing errors, and scope limits; missing files or absent markers do not automatically establish failure. The backend answer is preserved verbatim and may contain inferences beyond the evidence; review it separately against the tool observations above.",
+                  "## Complete saved snapshot", _json(record.model_dump())])
     return "\n\n".join(parts) + "\n"
 
 

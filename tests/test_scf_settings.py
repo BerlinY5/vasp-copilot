@@ -29,7 +29,7 @@ def parameter(result, name):
 
 
 def test_true_outcar_semicolon_layout_keeps_exact_offsets_and_no_algo_inference():
-    prefix = "标题\r\n".encode("utf-8")
+    prefix = "\u6807\u9898\r\n".encode("utf-8")
     rows = [b" NELM = 100; NELMIN=2; NELMDL=-5  # steps\r\n", b" EDIFF = .2D-05  stopping criterion\r\n",
             b" ICHARG = 2 charge\r\n", b" IALGO = 68 algorithm\r\n"]
     result = parse(prefix + b"".join(rows))
@@ -120,7 +120,7 @@ def test_special_setting_only_adds_conditional_context_never_erases_message(name
     diagnosis = diagnose_electronic_step(observation, settings)
     assert diagnosis.status == "reported_not_reached" and diagnosis.severity == "warning"
     note = next(c for c in diagnosis.settings_considerations if c.kind == kind)
-    assert "若" in note.summary and note.evidence[0].text.startswith(name)
+    assert "If" in note.summary and note.evidence[0].text.startswith(name)
     assert settings.model_dump() == before
 
 
@@ -130,7 +130,7 @@ def test_nelm_comparison_is_numeric_only_not_an_exhaustion_verdict(limit, relati
     diagnosis = diagnose_electronic_step(observe_last_iteration(content, 0), parse(content))
     assert diagnosis.status == "reported_not_reached"
     check = next(c for c in diagnosis.settings_considerations if c.kind == "sampled_step_vs_nelm")
-    assert check.relation == relation and "不据此宣布" in check.summary
+    assert check.relation == relation and "this does not establish" in check.summary
 
 
 @pytest.mark.parametrize("content", [
@@ -142,7 +142,7 @@ def test_run_restart_does_not_apply_earlier_parameters(content):
     diagnosis = diagnose_electronic_step(observe_last_iteration(content, 0), settings)
     assert settings.issues and diagnosis.status == "reported_not_reached"
     assert not diagnosis.settings_considerations
-    assert "不能将前缀设置用于该循环" in diagnosis.recommendations[1]
+    assert "the prefix settings cannot be applied to this loop" in diagnosis.recommendations[1]
 
 
 def test_unreliable_parameter_does_not_trigger_special_mode_interpretation():
@@ -224,7 +224,7 @@ def test_real_model_message_save_report_and_legacy_snapshot(tmp_path, monkeypatc
         assert values["EDIFF"]["value"] == 2e-6 and values["ALGO"]["status"] == "missing"
         assert data["electronic_step_diagnosis"]["settings_considerations"][0]["relation"] == "below"
         assert data["electronic_convergence"] == "unknown"
-        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "前缀 NELM=100，采样编号13；不能证明耗尽上限。"}}]}
+        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Prefix NELM=100, sampled step number 13; this does not establish exhaustion of the limit."}}]}
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(cli, "DeepSeekBackend", lambda config: DeepSeekBackend(config, transport))
@@ -233,10 +233,10 @@ def test_real_model_message_save_report_and_legacy_snapshot(tmp_path, monkeypatc
     result = json.loads(capsys.readouterr().out)
     record = RunRepository(database).get(result["history_record"]["run_id"])
     report = render_markdown(record)
-    assert "OUTCAR 前缀电子自洽设置" in report and "条件性说明" in report
+    assert "OUTCAR prefix electronic self-consistency settings" in report and "Conditional notes" in report
     old = copy.deepcopy(record)
     diagnosis = old.run.state.history[0].observation.data
     del diagnosis["electronic_settings"], diagnosis["electronic_step_diagnosis"]["settings_considerations"]
     snapshot = old.model_dump()
-    assert "未生成或未保存电子自洽设置观察" in render_markdown(old)
+    assert "Electronic self-consistency settings were not generated or saved" in render_markdown(old)
     assert old.model_dump() == snapshot

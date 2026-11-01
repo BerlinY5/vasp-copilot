@@ -25,36 +25,36 @@ def compare_output_steps(outcar: OutputDiagnosis, oszicar: OszicarObservation) -
     )
     problems = []
     if outcar.error:
-        problems.append(f"OUTCAR 读取失败（{outcar.error.kind}）")
+        problems.append(f"OUTCAR read failed ({outcar.error.kind})")
     if oszicar.error:
-        problems.append(f"OSZICAR 读取失败（{oszicar.error.kind}）")
+        problems.append(f"OSZICAR read failed ({oszicar.error.kind})")
     if iteration.issues:
-        problems.append("OUTCAR 最后迭代存在解析或截断问题")
+        problems.append("The last OUTCAR iteration has parsing or truncation issues")
     if iteration.status == "conflicting_markers":
-        problems.append("OUTCAR 最后迭代存在相互冲突的消息")
+        problems.append("The last OUTCAR iteration contains conflicting messages")
     if oszicar.issues:
-        problems.append("OSZICAR 存在采样或解析问题")
+        problems.append("OSZICAR has sampling or parsing issues")
     if iteration.header is None or iteration.ionic_step is None or iteration.electronic_step is None:
-        problems.append("缺少可靠的 OUTCAR 迭代标题和编号")
+        problems.append("A reliable OUTCAR iteration header and step numbers are missing")
     if oszicar.status != "observed":
-        problems.append("OSZICAR 未保留支持的记录")
+        problems.append("No supported OSZICAR record was retained")
     if problems:
-        ionic.reason = electron.reason = "；".join(problems)
+        ionic.reason = electron.reason = "; ".join(problems)
     else:
         if summary is None:
-            ionic.reason = "缺少 OSZICAR 摘要中的离子步编号"
+            ionic.reason = "The ionic step number is missing from the OSZICAR summary"
         else:
             ionic.status = "matched" if ionic.outcar_value == ionic.oszicar_value else "mismatched"
-            ionic.reason = "两处采样离子步编号相同" if ionic.status == "matched" else "两处采样离子步编号不同，原因未确定"
+            ionic.reason = "The sampled ionic step numbers match" if ionic.status == "matched" else "The sampled ionic step numbers differ; the cause is undetermined"
         if ionic.status != "matched":
-            electron.reason = "离子步编号未确认相同，不比较电子步编号，也不推算缺失编号"
+            electron.reason = "The ionic step numbers are not confirmed to match; electronic step numbers are not compared and missing numbers are not inferred"
         elif electronic is None:
-            electron.reason = "缺少 OSZICAR 电子迭代行"
+            electron.reason = "The OSZICAR electronic iteration row is missing"
         elif electronic.evidence.byte_offset >= summary.evidence.byte_offset:
-            electron.reason = "OSZICAR 电子行与摘要顺序不可靠"
+            electron.reason = "The order of the OSZICAR electronic row and summary is unreliable"
         else:
             electron.status = "matched" if electron.outcar_value == electron.oszicar_value else "mismatched"
-            electron.reason = "两处采样电子步编号相同" if electron.status == "matched" else "两处采样电子步编号不同，原因未确定"
+            electron.reason = "The sampled electronic step numbers match" if electron.status == "matched" else "The sampled electronic step numbers differ; the cause is undetermined"
     checks = [ionic, electron]
     status = ("mismatched" if any(check.status == "mismatched" for check in checks) else
               "matched" if all(check.status == "matched" for check in checks) else "unknown")

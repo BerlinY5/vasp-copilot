@@ -21,7 +21,7 @@ def reply(message, reason="stop"):
 
 
 def tool_reply(directory, arguments=None):
-    return reply({"content": "先检查目录", "tool_calls": [{"id": "call_1", "type": "function", "function": {
+    return reply({"content": "Inspect the directory first", "tool_calls": [{"id": "call_1", "type": "function", "function": {
         "name": "inspect_directory", "arguments": json.dumps({"directory": str(directory)}) if arguments is None else arguments,
     }}]}, "tool_calls")
 
@@ -30,12 +30,12 @@ def test_native_roundtrip_keeps_ids_and_observations(tmp_path):
     payloads = []
     def transport(payload, config):
         payloads.append(payload)
-        return tool_reply(tmp_path) if len(payloads) == 1 else reply({"content": "证据不足，状态 unknown。"})
-    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path)).run("检查", str(tmp_path))
+        return tool_reply(tmp_path) if len(payloads) == 1 else reply({"content": "Insufficient evidence; status unknown."})
+    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path)).run("Inspect", str(tmp_path))
     assert run.status == "completed" and len(run.state.history) == 1
     messages = payloads[1]["messages"]
     assert messages[-2]["tool_calls"][0]["id"] == messages[-1]["tool_call_id"] == "call_1"
-    assert messages[-2]["content"] == "先检查目录"
+    assert messages[-2]["content"] == "Inspect the directory first"
     observation = json.loads(messages[-1]["content"])
     assert observation["status"] == "success" and len(observation["data"]["files"]) == 8
     assert payloads[0]["thinking"] == {"type": "disabled"}
@@ -52,7 +52,7 @@ def test_native_roundtrip_keeps_ids_and_observations(tmp_path):
 def test_invalid_or_truncated_response_fails_closed(bad):
     backend = DeepSeekBackend(DeepSeekConfig("test-key"), lambda payload, config: bad)
     with pytest.raises(DeepSeekProtocolError):
-        backend.decide(AgentState(question="检查", directory="."), create_registry().describe())
+        backend.decide(AgentState(question="Inspect", directory="."), create_registry().describe())
 
 
 def test_environment_configuration_and_secret_repr():
@@ -144,7 +144,7 @@ def test_network_failures_reach_agent_as_safe_specific_errors(monkeypatch, tmp_p
             return Response()
 
     monkeypatch.setattr(deepseek, "build_opener", lambda *handlers: Opener())
-    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key")), create_registry(tmp_path)).run("检查", str(tmp_path))
+    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key")), create_registry(tmp_path)).run("Inspect", str(tmp_path))
     assert run.status == "backend_error"
     assert run.error.message == expected
     assert run.state.history == []
@@ -198,7 +198,7 @@ def test_native_tool_roundtrip_can_retrieve_references(tmp_path):
         assert observation["data"]["hits"][0]["evidence_type"] == "reference"
         assert observation["data"]["hits"][0]["source"] == "https://vasp.at/wiki/index.php/EDIFF"
         assert payload["messages"][-1]["tool_call_id"] == "reference_1"
-        return reply({"content": "这是通用解释；本次计算没有文件证据，状态 unknown。"})
-    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path)).run("解释 EDIFF", str(tmp_path))
+        return reply({"content": "General explanation only; no file evidence for this calculation, status unknown."})
+    run = AgentLoop(DeepSeekBackend(DeepSeekConfig("test-key"), transport), create_registry(tmp_path)).run("Explain EDIFF", str(tmp_path))
     assert run.status == "completed" and len(run.state.history) == 1
     assert "test-key" not in run.model_dump_json()

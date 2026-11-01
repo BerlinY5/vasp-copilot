@@ -11,7 +11,7 @@ from vasp_copilot.storage.repository import RunRepository, StoragePathError, Sto
 from vasp_copilot.tools.file_inspection import create_registry
 
 
-def sample_run(tmp_path, question="检查计算", max_steps=6):
+def sample_run(tmp_path, question="Inspect calculation", max_steps=6):
     directory = tmp_path / "calculation"
     directory.mkdir(exist_ok=True)
     (directory / "OUTCAR").write_text("Iteration 1( 3)\naborting loop because EDIFF is reached\n", encoding="ascii")
@@ -59,7 +59,7 @@ def test_incomplete_runs_are_saved_with_prior_history(tmp_path, status):
 
 
 def test_sql_special_characters_are_data_not_commands(tmp_path):
-    question = "中文 '); DROP TABLE runs; -- \" \\"
+    question = "\u4e2d\u6587 '); DROP TABLE runs; -- \" \\"
     run = sample_run(tmp_path, question=question)
     repository = RunRepository(tmp_path / "history.sqlite3")
     saved = repository.save(run, "mock")
@@ -78,7 +78,7 @@ def test_read_only_queries_do_not_create_missing_database(tmp_path):
 
 
 def test_read_only_queries_preserve_database_and_handle_encoded_paths(tmp_path):
-    path = tmp_path / "history # 中文.sqlite3"
+    path = tmp_path / "history # \u4e2d\u6587.sqlite3"
     repository = RunRepository(path)
     saved = repository.save(sample_run(tmp_path), "mock")
     before = path.read_bytes()

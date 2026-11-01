@@ -25,30 +25,30 @@ def sample_record(tmp_path, backend=None):
     (directory / "OUTCAR").write_text(
         " NSW = 0\n IBRION = -1\nIteration 1( 3)\naborting loop because EDIFF is reached\n"
         "General timing and accounting informations for this job:\n", encoding="ascii")
-    run = AgentLoop(backend or MockBackend(), create_registry(directory)).run("请检查计算", str(directory))
+    run = AgentLoop(backend or MockBackend(), create_registry(directory)).run("Please inspect the calculation", str(directory))
     return save_record(tmp_path, run)
 
 
 def test_report_separates_log_evidence_references_and_backend_answer(tmp_path):
     record = sample_record(tmp_path)
     report = render_markdown(record)
-    assert "# VASP-Copilot 诊断报告" in report
-    assert "| Agent 运行状态 | completed |" in report
+    assert "# VASP-Copilot Diagnostic Report" in report
+    assert "| Agent run status | completed |" in report
     assert "| electronic\\_convergence | unknown |" in report
     assert "| ionic\\_convergence | unknown |" in report
-    assert "知识库参考资料（非计算文件证据）" in report
-    assert "后端回答原文（未自动事实核验）" in report
+    assert "Knowledge-base references (not calculation file evidence)" in report
+    assert "Backend answer" in report
     assert "https://vasp.at/wiki/index.php/EDIFF" in report
     evidence = record.run.state.history[1].observation.data["last_iteration"]["markers"][0]
-    assert f"零起始字节偏移：{evidence['byte_offset']}" in report
+    assert f"zero-based byte offset: {evidence['byte_offset']}" in report
     assert evidence["text"] in report
     assert record.run.answer in report
-    assert report.index("工具证据与参考资料") < report.index("后端回答原文")
+    assert report.index("Tool evidence and references") < report.index("Backend answer")
 
 
 def test_complete_json_snapshot_can_be_recovered(tmp_path):
     record = sample_record(tmp_path)
-    appendix = render_markdown(record).split("## 完整保存快照\n\n", 1)[1]
+    appendix = render_markdown(record).split("## Complete saved snapshot\n\n", 1)[1]
     lines = appendix.strip().splitlines()
     assert json.loads("\n".join(lines[1:-1])) == record.model_dump()
 
@@ -67,23 +67,23 @@ def test_scan_report_keeps_input_output_parameters_and_mismatch(tmp_path):
         def decide(self, state, tools):
             if not state.history:
                 return ToolCall(tool_name="scan_directory", arguments={"directory": state.directory})
-            return Finish(answer="保留 unknown")
+            return Finish(answer="Preserve unknown")
     report = render_markdown(sample_record(tmp_path, ScanBackend()))
-    assert "INCAR 输入意图：relaxation" in report
-    assert "OUTCAR 前缀参数观察" in report
-    assert "输入与输出采样值比较" in report and "mismatched" in report
+    assert "INCAR input intent: relaxation" in report
+    assert "OUTCAR prefix parameter observations" in report
+    assert "Comparison of sampled input and output values" in report and "mismatched" in report
     assert "IBRION = -1" in report.replace("\\-", "-")
     assert "NSW = 0" in report
 
 
 @pytest.mark.parametrize("status", ["backend_error", "max_steps"])
 def test_failed_or_incomplete_run_exports_without_inventing_answer(tmp_path, status):
-    run = AgentRun(status=status, decision_steps=1, state=AgentState(question="检查", directory="missing"),
+    run = AgentRun(status=status, decision_steps=1, state=AgentState(question="Inspect", directory="missing"),
                    error=ErrorInfo(kind=status, message="Stopped"))
     report = render_markdown(save_record(tmp_path, run))
-    assert "本次运行未产生最终回答" in report
-    assert "本次运行未记录工具观察" in report
-    assert "运行错误或终止原因" in report
+    assert "This run did not produce a final answer" in report
+    assert "This run recorded no tool observations" in report
+    assert "Run error or termination reason" in report
     assert "Stopped" in report
 
 
@@ -94,37 +94,39 @@ def test_tool_error_and_unknown_tool_data_remain_visible(tmp_path):
         ToolEvent(step=2, call=ToolCall(tool_name="custom", arguments={}),
                   observation=ToolResult(tool_name="custom", status="success", data={"measurement": 123})),
     ]
-    run = AgentRun(status="completed", decision_steps=3, state=AgentState(question="检查", directory=".", history=events), answer="unknown")
+    run = AgentRun(status="completed", decision_steps=3, state=AgentState(question="Inspect", directory=".", history=events), answer="unknown")
     report = render_markdown(save_record(tmp_path, run))
     assert "FileNotFoundError" in report and '"measurement": 123' in report
-    assert "该工具没有专用报告视图" in report
+    assert "This tool has no dedicated report view" in report
 
 
 def test_old_or_malformed_observation_falls_back_to_raw_data(tmp_path):
     record = sample_record(tmp_path)
     record.run.state.history[1].observation.data = {"legacy": "preserve me"}
     report = render_markdown(record)
-    assert "不符合当前报告视图的数据格式" in report
+    assert "does not match the data format of the current report view" in report
     assert '"legacy": "preserve me"' in report
 
 
 def test_untrusted_markdown_and_html_cannot_escape_literal_blocks(tmp_path):
     record = sample_record(tmp_path)
-    payload = "```\n# 假结论\n<script>bad()</script>\n![remote](https://example.invalid/image)\n````"
+    payload = "```\n# \u5047\u7ed3\u8bba\n<script>bad()</script>\n![remote](https://example.invalid/image)\n````"
     record.run.answer = payload
     record.run.state.question = payload
     record.run.state.history[0].observation.data["files"][0]["name"] = "x|y\n<script>bad()</script>"
     report = render_markdown(record)
     assert f"`````text\n{payload}\n`````" in report
     assert "x\\|y<br>&lt;script&gt;bad\\(\\)&lt;/script&gt;" in report
-    assert "\n# 假结论\n" in report  # original text retained inside its longer fence
+    assert "\n# \u5047\u7ed3\u8bba\n" in report  # original text retained inside its longer fence
 
 
 def test_export_is_utf8_and_refuses_overwrite(tmp_path):
     record = sample_record(tmp_path)
-    target = tmp_path / "reports" / "报告.md"
+    record.run.answer = "\u4e2d\u6587 saved answer"
+    target = tmp_path / "reports" / "\u62a5\u544a.md"
     assert export_markdown(record, target) == target.resolve()
     before = target.read_bytes()
+    assert record.run.answer.encode("utf-8") in before
     assert before.decode("utf-8") == render_markdown(record)
     assert b"\r\n" not in before
     with pytest.raises(FileExistsError):

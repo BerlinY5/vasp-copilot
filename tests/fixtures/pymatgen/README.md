@@ -1,30 +1,30 @@
-# 公开 OUTCAR 回归样例
+# Public OUTCAR regression samples
 
-来源：materialsproject/pymatgen，标签 v2025.6.14，固定提交 `682bfd855dd89264b0ff8d6bee4815f8834cc5ac`。获取日期：2026-10-23。
+Source: materialsproject/pymatgen, tag v2025.6.14, pinned commit `682bfd855dd89264b0ff8d6bee4815f8834cc5ac`. Retrieved: 2026-10-23.
 
-原始路径：
+Original paths:
 
 - `tests/files/io/vasp/fixtures/static_silicon/OUTCAR`
 - `tests/files/io/vasp/fixtures/relaxation/OUTCAR`
 
-精确下载链接、解压后 SHA-256 和大小见 manifest.json。仓库 MIT 许可全文保存在 LICENSE.pymatgen，其中包含原作者版权声明；该许可文件仅针对这些上游资源，不为整个项目另行指定许可证。
+See manifest.json for the exact download URLs, decompressed SHA-256 hashes, and sizes. The full repository MIT license is preserved in LICENSE.pymatgen, including the original authors' copyright notice; that license file applies only to these upstream resources and does not specify a license for the entire project.
 
-两个 OUTCAR 直接来自上游公开的计算测试目录，文件标题均为 VASP 5.2.12。仅作 gzip 压缩，解压后字节与原始下载完全相同，未筛选行、修改内容或混入人工片段。压缩合计 27531 字节；原始合计 167498 字节。不含 POTCAR 文件，也不包含本地私有计算数据。
+Both OUTCAR files come directly from upstream public calculation test directories, and both file headers identify VASP 5.2.12. They were only gzip-compressed: decompressed bytes exactly match the original downloads, with no line selection, content changes, or artificial fragments added. The compressed total is 27531 bytes; the original total is 167498 bytes. No POTCAR files or local private calculation data are included.
 
-test_real_outcar.py 使用 Python 标准库 gzip 解压到 pytest 临时目录，测试结束由 pytest 管理临时文件。运行测试不需要网络或安装 pymatgen，也不会修改压缩样例。
+test_real_outcar.py uses the Python standard library gzip module to decompress them into pytest temporary directories; pytest manages the temporary files after testing. Tests require neither network access nor an installed pymatgen package and do not modify the compressed samples.
 
-区分三类测试：
+Distinguish three test categories:
 
-1. 完整公开日志：验证参数、最后迭代、结束标记及证据偏移。
-2. 派生场景：在内存中明确截断或拼接公开日志，测试上下文重置。这些不是上游真实失败日志。
-3. CLI 集成：OUTCAR 来自上游，INCAR 是测试临时构造的最小输入，不声称是上游配套 INCAR。
+1. Complete public logs: verify parameters, the last iteration, termination markers, and evidence offsets.
+2. Derived scenarios: explicitly truncate or concatenate public logs in memory to test context resets. These are not authentic upstream failure logs.
+3. CLI integration: OUTCAR comes from upstream; INCAR is a minimal input constructed temporarily by the test and is not claimed to be the matching upstream INCAR.
 
-预期参数、步号及偏移依据直接查看原始行确定，不由被测解析器自动生成。完整性测试验证解压后大小和 SHA-256，以防换行转换或样例意外改变。
+Expected parameters, step numbers, and offsets were determined by directly inspecting the original lines, not generated automatically by the parser under test. Integrity tests verify decompressed size and SHA-256 to detect newline conversions or accidental sample changes.
 
-更新样例时应重新核对来源、许可、固定提交、哈希及人工预期，不能只更新快照让失败测试通过。
+When updating samples, review their sources, licenses, pinned commits, hashes, and manually determined expectations again; do not merely update snapshots to make failing tests pass.
 
-## OSZICAR 补充样例（2026-10-24）
+## Additional OSZICAR sample (2026-10-24)
 
-static_silicon.OSZICAR 从此前已下载的同一固定提交 public-examples/static_silicon/OSZICAR 原样复制，1314 字节，无压缩或换行变换。来源路径为 tests/files/io/vasp/fixtures/static_silicon/OSZICAR，精确 URL、哈希和获取日期见 manifest.json 的 oszicar_samples 条目。沿用本目录 LICENSE.pymatgen。
+static_silicon.OSZICAR was copied unchanged from the previously downloaded public-examples/static_silicon/OSZICAR at the same pinned commit: 1314 bytes, without compression or newline conversion. The source path is tests/files/io/vasp/fixtures/static_silicon/OSZICAR; see the oszicar_samples entry in manifest.json for the exact URL, hash, and retrieval date. LICENSE.pymatgen in this directory also applies.
 
-人工核对的最后电子行位于零起始字节 1156，RMM 编号 13；能量摘要位于字节 1236，编号 1、F=E0=-10.645278 eV。tests/test_oszicar.py 核验原始字节、偏移和字段。其他解析边界使用测试中明确构造的记录，不冒充上游真实失败日志。单一样例不代表所有 VASP 版本与模式。
+Manual inspection identified the last electronic line at zero-based byte offset 1156, with RMM number 13; the energy summary is at byte 1236, with number 1 and F=E0=-10.645278 eV. tests/test_oszicar.py verifies the original bytes, offsets, and fields. Other parser boundaries use explicitly constructed test records and are not presented as authentic upstream failure logs. A single sample does not represent all VASP versions and modes.
