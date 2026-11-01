@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vasp-copilot"
+version = "0.1.0"
+description = "Evidence-grounded, read-only VASP diagnostics with a tool-calling agent"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pydantic>=2,<3"]
+keywords = ["vasp", "agent", "deepseek", "materials-science", "diagnostics"]
+
+[project.urls]
+Repository = "https://github.com/BerlinY5/vasp-copilot"
+Documentation = "https://github.com/BerlinY5/vasp-copilot/blob/main/README.md"
+Issues = "https://github.com/BerlinY5/vasp-copilot/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+vasp-copilot = "vasp_copilot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"vasp_copilot.rag" = ["knowledge/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

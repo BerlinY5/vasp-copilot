@@ -1,0 +1,53 @@
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Code quality tool caches
+.mypy_cache/
+.ruff_cache/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+
+# Logs
+*.log
+
+# Local calculation data and generated outputs
+/data/local/
+/runs/
+/reports/generated/
+
+# IDE settings (optional)
+.idea/
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
